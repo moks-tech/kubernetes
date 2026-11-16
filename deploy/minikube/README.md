@@ -1,6 +1,6 @@
 # Minikube (`mk4`)
 
-The self-hosted cluster: Argo CD hub, and the Terraform-managed Traefik and add-ons (cert-manager, Istio + Kiali, the monitoring stack). Every path below is from the repository root. Everything here stays on `mk4`; AWS and EKS resources belong in the [tools repository](https://github.com/mrjithendar/tools) (`deploy/eks`, `infrastructure`).
+The self-hosted cluster: Argo CD hub, and the Terraform-managed Traefik and add-ons (cert-manager, Istio + Kiali, the monitoring stack). Every path below is from the repository root. Everything here stays on `mk4`; AWS and EKS resources belong in the [tools repository](https://github.com/moks-tech/tools) (`deploy/eks`, `infrastructure`).
 
 | Path | Contents | Applied by |
 |---|---|---|

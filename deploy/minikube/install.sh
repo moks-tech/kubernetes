@@ -50,7 +50,7 @@ fi
 export PATH="$INSTALL_DIR:$PATH"
 if [[ "$ACTION" == install ]]; then
   TOOLS_DIR="${TOOLS_DIR:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd)/tools}"
-  [[ -f "$TOOLS_DIR/init.sh" ]] || fail "init.sh not found in $TOOLS_DIR: clone https://github.com/mrjithendar/tools.git beside this repository or set TOOLS_DIR."
+  [[ -f "$TOOLS_DIR/init.sh" ]] || fail "init.sh not found in $TOOLS_DIR: clone https://github.com/moks-tech/tools.git beside this repository or set TOOLS_DIR."
   exec bash "$TOOLS_DIR/init.sh" --profile minikube
 fi
 for tool in minikube kubectl; do

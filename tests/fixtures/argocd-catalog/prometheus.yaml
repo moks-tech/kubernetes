@@ -18,7 +18,7 @@ spec:
     - PruneLast=true
     - CreateNamespace=true
   source:
-    repoURL: https://github.com/mrjithendar/miniKube.git
+    repoURL: https://github.com/moks-tech/kubernetes.git
     targetRevision: master
     path: deploy/minikube/observability/prometheus
     helm:

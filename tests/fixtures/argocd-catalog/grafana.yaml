@@ -25,14 +25,14 @@ spec:
       releaseName: grafana
       valueFiles:
       - $values/deploy/minikube/observability/grafana/values.yaml
-  - repoURL: https://github.com/mrjithendar/miniKube.git
+  - repoURL: https://github.com/moks-tech/kubernetes.git
     targetRevision: master
     ref: values
-  - repoURL: https://github.com/mrjithendar/miniKube.git
+  - repoURL: https://github.com/moks-tech/kubernetes.git
     targetRevision: master
     path: deploy/minikube/observability/grafana/dashboards
   # ConfigMap grafana-dashboards-jithendar: the jithendar.com dashboards (metrics, logs, traces) are kept with the
   # site, in that repo's grafana/ folder (public repository, no credentials).
-  - repoURL: https://github.com/mrjithendar/jithendar.com.git
+  - repoURL: https://github.com/moks-tech/jithendar.com.git
     targetRevision: master
     path: grafana
