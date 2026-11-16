@@ -4,7 +4,7 @@ Everything for the self-hosted Minikube cluster `mk4`: creating the cluster, Tra
 add-ons (cert-manager, Let's Encrypt, Istio, Kiali, Prometheus, Grafana, Loki, OpenTelemetry Collector, Jaeger, OPA Gatekeeper), the
 mk4 Argo CD catalog (AppProject `mk-platform`, opt-in Harbor), and their workflows, scripts and tests.
 
-Moved here from [mrjithendar/tools](https://github.com/mrjithendar/tools) on 2026-11-08 with the same paths, so
+Moved here from [moks-tech/tools](https://github.com/moks-tech/tools) on 2026-11-08 with the same paths, so
 `deploy/minikube/...`, `minikube-infrastructure/...` and `scripts/argocd/...` mean what they meant there. tools keeps
 the AWS account (`infrastructure/`), EKS (`deploy/eks/`), the labauto installers and `init.sh`.
 
@@ -77,14 +77,14 @@ Paths inside the repository did not change; the repository did. Push this reposi
 deletes these files, then:
 
 1. **Argo CD access.** This repository is private, so Argo CD on mk4 needs a repository credential for
-   `https://github.com/mrjithendar/miniKube.git` (a read-only fine-grained token or deploy key), e.g.
-   `argocd repo add https://github.com/mrjithendar/miniKube.git --username x-access-token --password <token>`.
+   `https://github.com/moks-tech/kubernetes.git` (a read-only fine-grained token or deploy key), e.g.
+   `argocd repo add https://github.com/moks-tech/kubernetes.git --username x-access-token --password <token>`.
 2. **Re-apply the live specs** that read this repository (only Harbor and the AppProjects):
    `./deploy-argocd.sh harbor --context mk4`, then `./deploy-argocd.sh status --context mk4`.
 3. **GitHub settings** (they do not move with the files): run `scripts/setup-minikube-terraform-ci.sh` to create the
    environment `mk4` and its secret and variables here; add `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` for the Harbor
    build; set `MINIKUBE_TERRAFORM_APPLY` only when tools had it. Then delete the same names from tools.
-4. **OIDC role.** tools' `infrastructure/github-minikube-terraform.tf` now trusts `repo:mrjithendar/miniKube:environment:mk4`;
+4. **OIDC role.** tools' `infrastructure/github-minikube-terraform.tf` now trusts `repo:moks-tech/kubernetes:environment:mk4`;
    it applies when that tools change reaches tools `master`.
 5. **mk4 host.** Scripts run on the host (`expose-ingress.sh`, `deploy-harbor.sh --skip-build`) now come from a
    clone of this repository, not of tools.

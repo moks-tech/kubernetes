@@ -26,6 +26,6 @@ spec:
       releaseName: cert-manager
       valueFiles:
       - $values/deploy/minikube/cert-manager/values.yaml
-  - repoURL: https://github.com/mrjithendar/miniKube.git
+  - repoURL: https://github.com/moks-tech/kubernetes.git
     targetRevision: master
     ref: values

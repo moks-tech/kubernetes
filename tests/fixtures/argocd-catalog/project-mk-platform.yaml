@@ -7,9 +7,12 @@ spec:
   description: mk4 workloads; Argo CD and Traefik controllers remain externally managed
   sourceRepos:
   - https://github.com/mrjithendar/roboshop-ai.git
-  - https://github.com/mrjithendar/miniKube.git
-  - https://github.com/mrjithendar/moks.git
-  - https://github.com/mrjithendar/jithendar.com.git
+  - https://github.com/moks-tech/kubernetes.git
+  - https://github.com/mrjithendar/miniKube.git  # old URL, until every Application names the new one (2026-11-16)
+  - https://github.com/mrjithendar/moks-sre.git
+  - https://github.com/mrjithendar/moks.git  # old URL, until every Application names the new one (2026-11-16)
+  - https://github.com/moks-tech/jithendar.com.git
+  - https://github.com/mrjithendar/jithendar.com.git  # old URL, until every Application names the new one (2026-11-16)
   - https://grafana-community.github.io/helm-charts
   - https://kubernetes-sigs.github.io/metrics-server/
   - quay.io/jetstack/charts

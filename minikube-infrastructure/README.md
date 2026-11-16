@@ -284,20 +284,20 @@ The deploy job runs only when repository variable `MINIKUBE_TERRAFORM_APPLY` is 
   `master` can deploy to, so pull request jobs never see it. API endpoint `MK4_API_SERVER`: the k3s API of the
   Hetzner master (`server:` of context `mk4`, port 6443); the old Minikube `https://jithendar.com:32771` is gone. Revoke: `kubectl --context mk4 -n kube-system delete secret github-minikube-terraform-token`.
 - **State:** AWS role `github-tools-minikube-terraform` through GitHub OIDC, only for
-  `repo:mrjithendar/miniKube:environment:mk4`, only the state object and its `.tflock`
+  `repo:moks-tech/kubernetes:environment:mk4`, only the state object and its `.tflock`
   (tools repository: `infrastructure/github-minikube-terraform.tf`). No AWS key is stored. The role name keeps its
   old `github-tools-` prefix: renaming it would replace the role.
 
 Turning it on (once):
 
 1. In the tools repository, merge to `master`: its `create-aws-infrastructure.yml` applies `infrastructure/`, which
-   creates the role (or, if it exists, switches its trust to `repo:mrjithendar/miniKube:environment:mk4`).
+   creates the role (or, if it exists, switches its trust to `repo:moks-tech/kubernetes:environment:mk4`).
 2. `scripts/setup-minikube-terraform-ci.sh`: applies the ServiceAccount, checks the rendered kubeconfig can do what the
    releases need, creates the environment `mk4` (master only), stores the token and the variables `MK4_API_SERVER`,
    `MK4_CA_DATA`, `MK4_TERRAFORM_ROLE_ARN`. Needs `gh` signed in with admin on the repository.
 3. The move below, steps 1–6 (by hand, once). Step 6 can instead be the first CI run: do steps 1–5, then step 4 here.
-4. `gh variable set MINIKUBE_TERRAFORM_APPLY --repo mrjithendar/miniKube --body true`, then
-   `gh workflow run create-mk-infrastructure.yml --repo mrjithendar/miniKube -f plan_only=true` and read the plan in the
+4. `gh variable set MINIKUBE_TERRAFORM_APPLY --repo moks-tech/kubernetes --body true`, then
+   `gh workflow run create-mk-infrastructure.yml --repo moks-tech/kubernetes -f plan_only=true` and read the plan in the
    run summary before the first real apply.
 
 ## Moving the live mk4 add-ons from Argo CD (once)

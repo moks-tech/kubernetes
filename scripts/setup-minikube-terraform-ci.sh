@@ -19,7 +19,7 @@
 # repository (unless SKIP_GH=1). The AWS role exists once tools/infrastructure/github-minikube-terraform.tf is applied.
 set -euo pipefail
 
-REPO="${GITHUB_REPO:-mrjithendar/miniKube}"
+REPO="${GITHUB_REPO:-moks-tech/kubernetes}"
 CONTEXT="${KUBE_CONTEXT:-mk4}"
 NS="kube-system"
 SA="github-minikube-terraform"

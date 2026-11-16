@@ -56,7 +56,7 @@ moves to the NLB.
 Nothing outside mk4 can reach this Service, so Alloy on `roboshop-demo`
 (`deploy/eks/manifests/alloy` in the tools repository) pushes to `https://jithendar.com/loki/api/v1/push`, behind
 its own login `loki-push-auth`. That login reaches only `push`, and it cannot read logs.
-The steps are in [`deploy/eks/DEPLOY.md`](https://github.com/mrjithendar/tools/blob/master/deploy/eks/DEPLOY.md#2-install-the-add-ons) in the tools repository.
+The steps are in [`deploy/eks/DEPLOY.md`](https://github.com/moks-tech/tools/blob/master/deploy/eks/DEPLOY.md#2-install-the-add-ons) in the tools repository.
 
 EKS streams have `cluster="roboshop-demo"`; mk4's own streams have no `cluster` label. Both
 share the 7-day retention, the 10Gi PVC and the 4 MB/s ingestion limit. The pipeline in

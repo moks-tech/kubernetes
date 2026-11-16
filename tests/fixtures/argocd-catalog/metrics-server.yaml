@@ -25,6 +25,6 @@ spec:
       releaseName: metrics-server
       valueFiles:
       - $values/deploy/minikube/metrics-server/values.yaml
-  - repoURL: https://github.com/mrjithendar/miniKube.git
+  - repoURL: https://github.com/moks-tech/kubernetes.git
     targetRevision: master
     ref: values
