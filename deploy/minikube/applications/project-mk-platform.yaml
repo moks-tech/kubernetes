@@ -8,14 +8,13 @@ spec:
   # owns them (minikube-infrastructure/).
   description: mk4 workloads; Argo CD and the Terraform add-ons are managed outside Argo CD
   sourceRepos:
-  - https://github.com/moks-tech/roboshop-ai.git
-  - https://github.com/mrjithendar/roboshop-ai.git  # until every Application names moks-tech (2026-11-16 org move)
+  - https://github.com/mrjithendar/roboshop-ai.git
   - https://github.com/moks-tech/kubernetes.git
-  - https://github.com/mrjithendar/miniKube.git  # until every Application names moks-tech (2026-11-16 org move)
-  - https://github.com/moks-tech/moks-sre.git
-  - https://github.com/mrjithendar/moks.git  # until every Application names moks-tech (2026-11-16 org move)
+  - https://github.com/mrjithendar/miniKube.git  # old URL, until every Application names the new one (2026-11-16)
+  - https://github.com/mrjithendar/moks-sre.git
+  - https://github.com/mrjithendar/moks.git  # old URL, until every Application names the new one (2026-11-16)
   - https://github.com/moks-tech/jithendar.com.git
-  - https://github.com/mrjithendar/jithendar.com.git  # until every Application names moks-tech (2026-11-16 org move)
+  - https://github.com/mrjithendar/jithendar.com.git  # old URL, until every Application names the new one (2026-11-16)
   - https://charts.jfrog.io
   destinations:
   - namespace: roboshop-ai

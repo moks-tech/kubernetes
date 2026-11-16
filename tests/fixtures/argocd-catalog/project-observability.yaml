@@ -7,11 +7,11 @@ spec:
   description: mk4 observability stack (Grafana, Prometheus, Loki + Alloy, OpenTelemetry Collector, Jaeger)
   sourceRepos:
   - https://github.com/moks-tech/kubernetes.git
-  - https://github.com/mrjithendar/miniKube.git  # until every Application names moks-tech (2026-11-16 org move)
+  - https://github.com/mrjithendar/miniKube.git  # old URL, until every Application names the new one (2026-11-16)
   - https://grafana-community.github.io/helm-charts
   # grafana/ folder: the jithendar.com dashboards (ConfigMap only; see namespaceResourceWhitelist).
   - https://github.com/moks-tech/jithendar.com.git
-  - https://github.com/mrjithendar/jithendar.com.git  # until every Application names moks-tech (2026-11-16 org move)
+  - https://github.com/mrjithendar/jithendar.com.git  # old URL, until every Application names the new one (2026-11-16)
   destinations:
   - namespace: monitoring
     server: https://kubernetes.default.svc

@@ -28,7 +28,7 @@ PULL_ROBOT = 'k8s-pull'                     # system robot: robot$k8s-pull
 PULL_SECRET = 'harbor-pull'
 CI_DAYS = 365
 # Robot name (robot$jithendar+<name>) -> GitHub repository whose workflows push.
-CI_REPOSITORIES = {'moks': 'moks-tech/moks-sre', 'roboshop-ai': 'moks-tech/roboshop-ai',
+CI_REPOSITORIES = {'moks': 'mrjithendar/moks-sre', 'roboshop-ai': 'mrjithendar/roboshop-ai',
                    'jithendar-com': 'moks-tech/jithendar.com'}
 # Namespaces on mk4 whose pods run images from the project.
 NAMESPACES = ('jithendar', 'moks', 'moks-terminals', 'moks-diagnostics', 'roboshop-ai')

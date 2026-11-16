@@ -23,7 +23,7 @@ CATALOGS = (MONITORING_ARGOCD,)
 # Opt-in Applications (Harbor): deployed only when named, never by "all"; validated with CATALOGS.
 OPTIONAL_ARGOCD = MONITORING_ARGOCD / 'optional'
 MINIKUBE_REPO = 'https://github.com/moks-tech/kubernetes.git'
-APP_REPO = 'https://github.com/moks-tech/roboshop-ai.git'
+APP_REPO = 'https://github.com/mrjithendar/roboshop-ai.git'
 SITE_REPO = 'https://github.com/moks-tech/jithendar.com.git'
 CHECKOUTS = {MINIKUBE_REPO: MINIKUBE, APP_REPO: APP, SITE_REPO: SITE}
 

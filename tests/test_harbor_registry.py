@@ -54,8 +54,8 @@ def test_ci_robots_push_and_pull_one_project_and_secrets_go_to_gh_on_stdin(runs)
         assert body['permissions'] == [{'kind': 'project', 'namespace': 'jithendar', 'access': [
             {'resource': 'repository', 'action': 'push'}, {'resource': 'repository', 'action': 'pull'}]}]
     sets = [(args, kwargs['input']) for args, kwargs in runs]
-    assert (['gh', 'secret', 'set', 'HARBOR_PASSWORD', '-R', 'moks-tech/moks-sre'], 's3cr3t') in sets
-    assert (['gh', 'secret', 'set', 'HARBOR_USERNAME', '-R', 'moks-tech/moks-sre'], 'robot$jithendar+moks') in sets
+    assert (['gh', 'secret', 'set', 'HARBOR_PASSWORD', '-R', 'mrjithendar/moks-sre'], 's3cr3t') in sets
+    assert (['gh', 'secret', 'set', 'HARBOR_USERNAME', '-R', 'mrjithendar/moks-sre'], 'robot$jithendar+moks') in sets
     assert not any('s3cr3t' in arg for args, _ in runs for arg in args)
 
 
