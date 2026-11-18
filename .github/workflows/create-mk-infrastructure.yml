@@ -81,7 +81,7 @@ jobs:
           path: jithendar.com
           ssh-key: ${{ secrets.JITHENDAR_COM_DEPLOY_KEY }}
           persist-credentials: false
-          sparse-checkout: services/grafana
+          sparse-checkout: grafana
 
       - name: Install Terraform
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
