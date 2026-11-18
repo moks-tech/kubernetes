@@ -32,6 +32,19 @@ extraScrapeConfigs:
     relabel_configs:
       - target_label: service
         replacement: jithendar-com
+  # jithendar.com's SEO agent (moks-cms services/seo-agent): flows, crews, tasks, tool calls, LLM spend, news desk, MCP.
+  # /metrics on the internal API port through the headless Service seo-agent-metrics; the seo-agent NetworkPolicy
+  # (jithendar.com kubernetes/seo-agent-40-seo-agent.yaml) admits app=roboshop-prometheus on 8080. Dashboards:
+  # Jithendar.com · SEO agents, · CrewAI and · News desk, which all select job="seo-agent".
+  - job_name: seo-agent
+    metrics_path: /metrics
+    dns_sd_configs:
+      - names: ["seo-agent-metrics.jithendar.svc.cluster.local"]
+        type: A
+        port: 8080
+    relabel_configs:
+      - target_label: service
+        replacement: seo-agent
   # MOKS (namespace moks): api, worker, executor and terminal pods through the headless Service moks-metrics.
   # The moks NetworkPolicy admits the monitoring namespace on 9464 only. Same block as moks
   # deploy/grafana/prometheus-scrape.yaml; alerts in files/alerts.yml (groups moks-*).
