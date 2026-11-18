@@ -22,7 +22,7 @@ spec:
       automountServiceAccountToken: false
       initContainers:
       - name: download
-        image: rclone/rclone:1.75.2
+        image: rclone/rclone:1.76.0
         command: [sh, -c]
         args:
         - |
