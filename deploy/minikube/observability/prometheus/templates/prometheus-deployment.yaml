@@ -85,8 +85,9 @@ spec:
           livenessProbe:
             httpGet: {path: /prometheus/-/healthy, port: http}
           resources:
-            requests: {cpu: 100m, memory: 256Mi}
-            limits: {cpu: "1", memory: 768Mi}
+            # The WAL replay still holds old high-cardinality series until head compaction, so leave headroom.
+            requests: {cpu: 100m, memory: 512Mi}
+            limits: {cpu: "1", memory: 1536Mi}
           volumeMounts:
             - {name: config, mountPath: /etc/prometheus, readOnly: true}
             - {name: data, mountPath: /prometheus-data}

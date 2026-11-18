@@ -36,6 +36,12 @@ data:
           - source_labels: [__meta_kubernetes_node_name]
             target_label: __metrics_path__
             replacement: /api/v1/nodes/$1/proxy/{{ $path }}
+        # k3s runs apiserver and etcd in the kubelet's process, so /metrics carries their histograms too
+        # (~50k series, unused by any dashboard or alert). Counters and gauges are kept.
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            action: drop
+            regex: '(apiserver|etcd)_.+_bucket'
       {{- end }}
       {{- end }}
       {{- if and .Values.kubernetesMetrics.enabled .Values.istioMetrics.enabled }}
@@ -56,6 +62,12 @@ data:
             target_label: namespace
           - source_labels: [__meta_kubernetes_pod_name]
             target_label: pod
+        # Prometheus is meshed, so every scrape it makes is itself reported as Istio request telemetry by both
+        # sidecars: ~100k series (2026-11-18) that grow with each target and OOM-killed Prometheus. Drop them.
+        metric_relabel_configs:
+          - source_labels: [source_workload]
+            action: drop
+            regex: prometheus
       {{- end }}
       {{- with .Values.extraScrapeConfigs }}
       {{- toYaml . | nindent 6 }}
