@@ -15,6 +15,11 @@ spec:
         # Meshed, scrapes included: they go out through the sidecar, which sends mTLS to every meshed target (STRICT
         # mesh-wide, deploy/minikube/istio/mesh) and plain text to the rest (istiod, kubelets via the API server).
         # No includeOutboundIPRanges "" here: that made every scrape plain text, which STRICT ports refuse.
+        # Except the sidecars' own ports: captured, <pod>:15090 landed on this pod's Envoy listener 0.0.0.0:15090, so
+        # every envoy-stats target answered with Prometheus's own sidecar stats (until 2026-11-19: no request ever
+        # reached Kiali or a dashboard, ~100k duplicate series). Envoy never captures them inbound, so they need no
+        # mTLS; each namespace's NetworkPolicy admits monitoring on 15020 and 15090.
+        traffic.sidecar.istio.io/excludeOutboundPorts: "15020,15090"
         checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
     spec:
       {{- with .Values.nodeSelector }}

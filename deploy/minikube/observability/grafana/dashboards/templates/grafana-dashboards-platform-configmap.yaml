@@ -1,4 +1,5 @@
-# Grafana folder Platform: the shared clusters every application uses (PostgreSQL in postgres-db, Valkey in redis).
+# Grafana folder Platform: the shared services every application uses (PostgreSQL in postgres-db, Valkey in redis,
+# bge-m3 embeddings in embeddings).
 # JSON at the chart root, loaded verbatim (never templated).
 apiVersion: v1
 kind: ConfigMap

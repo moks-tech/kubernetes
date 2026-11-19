@@ -192,3 +192,45 @@ groups:
         annotations:
           summary: 'Valkey evicted {{ $value | humanize }} TTL keys in 15 min (memory pressure)'
           runbook_url: 'https://github.com/moks-tech/kubernetes/blob/master/minikube-infrastructure/README.md#redis-valkey'
+  # bge-m3 embeddings (deploy/minikube/embeddings/bge-m3) for seo-agent and moks. Ollama exports no metrics: requests
+  # come from the callers' sidecars (reporter="source", so a missing pod still counts), the rest from cAdvisor.
+  # Dashboard: Platform / Embeddings (bge-m3).
+  - name: embeddings
+    rules:
+      - alert: BgeM3NotRunning
+        expr: absent(container_memory_working_set_bytes{job="kubernetes-cadvisor", namespace="embeddings", container="ollama"})
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'The bge-m3 ollama container has not been running for 10 min; seo-agent and moks cannot embed'
+          runbook_url: 'https://github.com/moks-tech/kubernetes/blob/master/deploy/minikube/embeddings/bge-m3/README.md#monitoring'
+      # Resident memory under 1 GiB: the 1.16 GB of weights are not in memory, so the next request pays a cold load.
+      - alert: BgeM3ModelNotLoaded
+        expr: max(container_memory_rss{job="kubernetes-cadvisor", namespace="embeddings", container="ollama"}) < 1073741824
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'bge-m3 holds {{ $value | humanize1024 }}B resident, so the model is not loaded'
+          runbook_url: 'https://github.com/moks-tech/kubernetes/blob/master/deploy/minikube/embeddings/bge-m3/README.md#monitoring'
+      # At least 3 in the window, so one cancelled request does not page.
+      - alert: BgeM3RequestsFailing
+        expr: |
+          sum by (source_workload_namespace, source_workload, response_code) (
+            increase(istio_requests_total{job="envoy-stats", reporter="source", destination_service_namespace="embeddings", destination_service_name="bge-m3", response_code!~"2.."}[15m])
+          ) >= 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: '{{ $labels.source_workload_namespace }}/{{ $labels.source_workload }} got {{ $value | humanize }} answers {{ $labels.response_code }} from bge-m3 in 15 min'
+          runbook_url: 'https://github.com/moks-tech/kubernetes/blob/master/deploy/minikube/embeddings/bge-m3/README.md#monitoring'
+      - alert: BgeM3MemoryNearLimit
+        expr: max(container_memory_working_set_bytes{job="kubernetes-cadvisor", namespace="embeddings", container="ollama"}) / max(container_spec_memory_limit_bytes{job="kubernetes-cadvisor", namespace="embeddings", container="ollama"} > 0) > 0.9
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'bge-m3 uses {{ $value | humanizePercentage }} of its memory limit and may be OOM-killed'
+          runbook_url: 'https://github.com/moks-tech/kubernetes/blob/master/deploy/minikube/embeddings/bge-m3/README.md#monitoring'

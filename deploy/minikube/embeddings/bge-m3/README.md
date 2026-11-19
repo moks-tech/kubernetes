@@ -38,6 +38,31 @@ kubectl -n embeddings port-forward svc/bge-m3 11434:11434 &   # port-forward rea
 curl -s localhost:11434/api/embed -d '{"model":"bge-m3:567m","input":["hello"]}' | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["embeddings"][0]))'   # 1024
 ```
 
+## Monitoring
+
+Grafana → Platform → **Embeddings (bge-m3)** (`https://jithendar.com/grafana/d/platform-embeddings`, JSON in
+`deploy/minikube/observability/grafana/dashboards/platform-embeddings.json`). Ollama exports no metrics of its own,
+so:
+
+- **Traffic** (requests, codes, latency per caller) comes from the callers' Istio sidecars (`istio_requests_total`,
+  `reporter="source"`), which also count requests that never reached the pod. *Vectors/s* is an estimate: response
+  bytes ÷ 12.8 KB, the size of one 1024-dimension vector in Ollama's JSON.
+- **Model in memory**, CPU, memory and network come from cAdvisor (container `ollama`); the volume from the kubelet.
+
+Alerts (`deploy/minikube/observability/prometheus/files/alerts.yml`, group `embeddings`):
+
+- **BgeM3NotRunning**: no `ollama` container for 10 min. `kubectl -n embeddings get pods,pvc` and
+  `kubectl -n embeddings describe pod -l app=bge-m3`: a volume stuck attaching (Hetzner), `fetch-model` failing (logs
+  say whether the digest no longer matches) or the pod unschedulable (1.5 GiB memory request).
+- **BgeM3ModelNotLoaded**: running, but under 1 GiB resident, so the weights are not in memory. `kubectl -n
+  embeddings logs deploy/bge-m3 -c ollama --tail=50`; one request through "Checking it" loads the model again
+  (about 5 s).
+- **BgeM3RequestsFailing**: a caller keeps getting non-2xx answers; the code says which. `403`: the caller is not in
+  `callers` or has no sidecar. `503` (flags `UH`): no ready pod. `404`: the model name differs from `model.name`.
+  `0` or flags `DC`: the caller gave up first, so raise its timeout (moks: `timeout_seconds` 300).
+- **BgeM3MemoryNearLimit**: over 90% of the 2.5 GiB limit for 15 min. Large batches of long texts grow the compute
+  buffers. Lower the caller's batch size or `ollama.contextLength`, or raise `resources.limits.memory`.
+
 ## Changing the model
 
 Every caller's stored vectors belong to one model. A new model, a new tag or a re-pushed digest means a full reindex in

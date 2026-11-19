@@ -62,8 +62,10 @@ data:
             target_label: namespace
           - source_labels: [__meta_kubernetes_pod_name]
             target_label: pod
-        # Prometheus is meshed, so every scrape it makes is itself reported as Istio request telemetry by both
-        # sidecars: ~100k series (2026-11-18) that grow with each target and OOM-killed Prometheus. Drop them.
+        # Prometheus is meshed, so its scrapes of application ports (moks :9464, seo-agent :8080, ...) are themselves
+        # reported as Istio request telemetry by the targets' sidecars: series that grow with each target and
+        # OOM-killed Prometheus on 2026-11-18. Drop them. (Most of those ~100k series were Prometheus's own sidecar
+        # stats repeated once per target; excludeOutboundPorts in prometheus-deployment.yaml fixed that.)
         metric_relabel_configs:
           - source_labels: [source_workload]
             action: drop
