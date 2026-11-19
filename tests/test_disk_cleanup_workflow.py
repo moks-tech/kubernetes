@@ -55,6 +55,13 @@ def test_inputs_and_secrets_reach_the_shell_only_through_env():
     assert not re.search(r'\$\{\{\s*secrets\.', yaml.safe_dump(JOB['env']))
 
 
+def test_harbor_login_is_admin_with_the_harbor_password_secret():
+    env = JOB['steps'][step('./disk-cleanup.sh')]['env']
+    assert env == {'HARBOR_USER': 'admin', 'HARBOR_PASSWORD': '${{ secrets.HARBOR_PASSWORD }}'}
+    script = (ROOT / 'disk-cleanup.sh').read_text()
+    assert 'user="${HARBOR_USER:-admin}" password="${HARBOR_PASSWORD:-}"' in script
+
+
 def test_node_addresses_are_masked_before_the_script_prints_them():
     assert step('::add-mask::$ip') < step('./disk-cleanup.sh')
 

@@ -136,7 +136,9 @@ kubectl --context mk4 -n harbor get secret harbor-credentials -o jsonpath='{.dat
 
 Harbor reads that password only on its first start. If you change it in the portal, the Secret stops working for the
 API calls below and `disk-cleanup.sh` (which then asks for the password). To bring them back in line, sign in and
-change the admin password (top right, **Change Password**) back to the Secret's value.
+change the admin password (top right, **Change Password**) back to the Secret's value. The daily
+`.github/workflows/disk-cleanup.yml` signs in as `admin` with the repository secret `HARBOR_PASSWORD` instead: update it
+too when the password changes (`gh secret set HARBOR_PASSWORD --repo moks-tech/kubernetes`).
 
 ## Verify
 
