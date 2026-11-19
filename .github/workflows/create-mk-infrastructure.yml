@@ -24,6 +24,7 @@ on:
     paths:
       - 'minikube-infrastructure/**'
       - 'deploy/minikube/cert-manager/**'
+      - 'deploy/minikube/embeddings/**'
       - 'deploy/minikube/metrics-server/values.yaml'
       - 'deploy/minikube/gatekeeper/**'
       - 'deploy/minikube/istio/**'
