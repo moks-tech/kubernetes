@@ -36,7 +36,7 @@ gateway:
     - host: redis/redis.jithendar.com
 
 # The routing table for jithendar.com. First match wins, so a prefix that begins with another one comes first
-# (/opensearch-dashboards before /opensearch). A delegate that does not exist (an application not installed) drops
+# (/prometheus/api/v1/write before /prometheus). A delegate that does not exist (an application not installed) drops
 # its route, and the request falls through to the site, which answers 404.
 root:
   host: jithendar.com
@@ -54,8 +54,6 @@ root:
     - {name: prometheus, prefix: /prometheus, to: monitoring/prometheus}
     - {name: loki, prefix: /loki, to: monitoring/loki}
     - {name: moks, prefix: /moks, to: moks/moks}
-    - {name: opensearch-dashboards, prefix: /opensearch-dashboards, to: moks/moks-opensearch-dashboards}
-    - {name: opensearch, prefix: /opensearch, to: moks/moks-opensearch}
     - {name: roboshop, prefix: /roboshop, to: roboshop-ai/roboshop}
     - {name: postgres, prefix: /postgres, to: postgres-db/postgres-ui}
     - {name: redis, prefix: /redis, to: redis/redis-ui}
@@ -75,19 +73,15 @@ basicAuth:
   - {name: prometheus, prefix: /prometheus, except: /prometheus/api/v1/write, from: monitoring/monitoring-auth}
   - {name: loki-push, prefix: /loki/api/v1/push, from: monitoring/loki-push-auth}
   - {name: loki-read, prefix: /loki, except: /loki/api/v1/push, from: monitoring/loki-read-auth}
-  - {name: opensearch-dashboards, prefix: /opensearch-dashboards, from: moks/moks-opensearch-dashboards-auth}
-  - {name: opensearch, prefix: /opensearch, except: /opensearch-dashboards, from: moks/moks-opensearch-auth}
   # RedisInsight has no login of its own (it is preconfigured with the console user): IP allowlist plus this.
   - {name: redis, prefix: /redis, from: redis/redis-ui-auth}
 # Set by Terraform from that Secret: {<name>: "<user>:{SHA}<base64 sha1>"}. Rendering fails if one is missing.
 basicAuthUsers: {}
 
-# The bundled OpenSearch pod (moks) has no security of its own and POST/PUT change data, so /opensearch is read-only
-# from outside: GET and HEAD, plus POST to the search endpoints, which take their query in the body.
-readOnly:
-  - prefix: /opensearch
-    except: /opensearch-dashboards
-    postSuffixes: [/_search, /_msearch, /_count]
+# Prefixes that are read-only from outside: GET and HEAD, plus POST to the listed suffixes (search endpoints that take
+# their query in the body), e.g. {prefix: /search, except: /search-ui, postSuffixes: [/_search]}. None since MOKS's
+# OpenSearch was retired (2026-11-19).
+readOnly: []
 
 # Every route on the gateway.
 compression:
@@ -175,8 +169,6 @@ cloudflare:
       - /grafana
       - /prometheus
       - /loki
-      - /opensearch-dashboards
-      - /opensearch
       - /postgres
       - /redis
       - /ui

@@ -148,27 +148,8 @@ groups:
           summary: The MOKS database has used over 70% of its volume
   - name: moks-search
     rules:
-      - alert: MoksSearchDown
-        expr: moks_search_backend{metric="up"} == 0
-        for: 5m
-        labels:
-          severity: critical
-        annotations:
-          summary: The MOKS worker cannot reach the search cluster; search falls back to PostgreSQL
-      - alert: MoksSearchWriteBlocked
-        expr: moks_search_backend{metric="read_only"} == 1
-        for: 2m
-        labels:
-          severity: critical
-        annotations:
-          summary: OpenSearch has blocked writes (usually the shared disk's flood-stage watermark)
-      - alert: MoksIndexDeadLetters
-        expr: moks_search_backend{metric="outbox_dead"} > 0
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: MOKS index changes gave up after all retries; retry from Knowledge after fixing the cause
+      # MOKS searches PostgreSQL (rag.backend postgres) since 2026-11-19. The moks_search_backend probe, its outbox
+      # and their alerts belong to an external search cluster (OpenSearch), which mk4 no longer runs.
       - alert: MoksRetrievalFallingBack
         expr: sum by (reason) (rate(moks_retrieval_fallbacks_total[15m])) > 0
         for: 15m

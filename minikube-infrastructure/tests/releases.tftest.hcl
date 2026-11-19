@@ -10,8 +10,6 @@ mock_provider "kubernetes" {
         "prometheus"              = "a:{SHA}AAAAAAAAAAAAAAAAAAAAAAAAAAA="
         "loki-push"               = "a:{SHA}AAAAAAAAAAAAAAAAAAAAAAAAAAA="
         "loki-read"               = "a:{SHA}AAAAAAAAAAAAAAAAAAAAAAAAAAA="
-        "opensearch-dashboards"   = "a:{SHA}AAAAAAAAAAAAAAAAAAAAAAAAAAA="
-        "opensearch"              = "a:{SHA}AAAAAAAAAAAAAAAAAAAAAAAAAAA="
         "redis"                   = "a:{SHA}AAAAAAAAAAAAAAAAAAAAAAAAAAA="
       }
     }
@@ -128,7 +126,7 @@ run "postgres_tenants_get_a_database_role_and_credentials" {
     postgres_allowed_ips = ["192.0.2.1/32"]
     postgres_databases = {
       shop = { namespace = "shop-ns" }
-      blog = { namespace = "blog-ns", connection_limit = 10 }
+      blog = { namespace = "blog-ns", connection_limit = 10, extensions = ["vector"] }
     }
   }
 
@@ -152,6 +150,14 @@ run "postgres_tenants_get_a_database_role_and_credentials" {
       alltrue([for d in local.postgres_tenants.databases : d.owner == d.name && d.databaseReclaimPolicy == "retain"])
     )
     error_message = "Each database is owned by its own role and kept when its entry is removed."
+  }
+
+  assert {
+    condition = (
+      [for d in local.postgres_tenants.databases : d.extensions if d.name == "blog"][0] == [{ name = "vector", ensure = "present" }] &&
+      length([for d in local.postgres_tenants.databases : d.extensions if d.name == "shop"][0]) == 0
+    )
+    error_message = "A database lists the extensions the operator installs, and one without any lists none."
   }
 }
 

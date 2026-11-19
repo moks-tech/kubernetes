@@ -35,7 +35,7 @@ NAMESPACES = ('jithendar', 'moks', 'moks-terminals', 'moks-diagnostics', 'robosh
 ECR = '881026659929.dkr.ecr.us-east-1.amazonaws.com'
 # ECR repository -> Harbor repository (same name, in the project).
 IMAGES = ('jithendar-com', 'practice-executor', 'practice-sandbox',
-          'moks', 'moks-crewai', 'moks-reranker', 'moks-terminal', 'moks-opensearch',
+          'moks', 'moks-crewai', 'moks-reranker', 'moks-terminal',
           *(f'roboshop-{s}' for s in ('ai-gateway', 'cart-service', 'catalogue-service', 'currency-service',
                                       'kafka-bridge', 'mcp-server', 'moks', 'payment-service', 'shipping',
                                       'user-service', 'web')))
