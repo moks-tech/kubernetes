@@ -175,7 +175,7 @@ docker push registry.jithendar.com/jithendar/REPOSITORY:latest
 
 | Repository | Images (`registry.jithendar.com/jithendar/…`) | CI robot |
 |---|---|---|
-| moks | `moks`, `moks-crewai`, `moks-reranker`, `moks-terminal`, `moks-opensearch` | `robot$jithendar+moks` |
+| moks | `moks`, `moks-crewai`, `moks-reranker`, `moks-terminal` | `robot$jithendar+moks` |
 | jithendar.com | `jithendar-com`, `practice-executor`, `practice-sandbox` | `robot$jithendar+jithendar-com` |
 | roboshop-ai | `roboshop-<service>` (`roboshop-shipping` for shipping-service) | `robot$jithendar+roboshop-ai` |
 | tools | none in Harbor: `jithendar/custom-harbour` stays on Docker Hub (Harbor cannot pull itself) | — |
@@ -205,7 +205,7 @@ An existing robot keeps its secret unless `--rotate` is given, so every command 
 ## Kubernetes pull access
 
 Pods pull our images from Harbor only, through `imagePullSecrets: [{name: harbor-pull}]` in each workload (Git, so
-Argo CD and `kubectl apply` keep it). Third-party images (postgres, OpenSearch, Valkey, Kafka, busybox) still come
+Argo CD and `kubectl apply` keep it). Third-party images (postgres, Valkey, Kafka, busybox) still come
 from their own registries at pinned versions, and Harbor's own images from Docker Hub.
 
 Every image runs `:latest` with `imagePullPolicy: Always`, so **while Harbor is down no pod that starts or restarts

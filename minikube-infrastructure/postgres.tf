@@ -9,6 +9,8 @@
 #   <namespace>/postgres-db-credentials: host, port, dbname, username, password, uri (through PgBouncer),
 #   direct-host, direct-uri (straight to the primary; for migrations that need session features PgBouncer lacks).
 # Removing an entry drops the role's login and the Secrets but keeps the database (databaseReclaimPolicy retain).
+# `extensions` are created by the operator, which connects as the superuser, so a tenant gets pgvector without any
+# role of its own being able to create extensions.
 
 locals {
   postgres_namespace = "postgres-db"
@@ -33,6 +35,7 @@ locals {
       owner                 = name
       ensure                = "present"
       databaseReclaimPolicy = "retain"
+      extensions            = [for e in db.extensions : { name = e, ensure = "present" }] # empty: the chart renders none
     }]
   }
 }

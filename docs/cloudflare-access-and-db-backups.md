@@ -58,8 +58,8 @@ Order matters: each step keeps the site working.
 2. **Zero Trust** (one.dash.cloudflare.com): pick a team name (the team domain is `<team>.cloudflareaccess.com`). Under
    Settings → Authentication add a login method (One-time PIN by email works with no setup; Google if preferred).
 3. Access → Applications → **Add an application → Self-hosted**, name `jithendar.com admin tools`. Destinations (one
-   per path): `jithendar.com/argocd`, `/kiali`, `/grafana`, `/prometheus`, `/loki`, `/opensearch-dashboards`,
-   `/opensearch`, `/postgres`, `/redis`, `/ui`, `/v1`. Policies:
+   per path): `jithendar.com/argocd`, `/kiali`, `/grafana`, `/prometheus`, `/loki`, `/postgres`,
+   `/redis`, `/ui`, `/v1`. Policies:
    - *Owner*: Allow, Include → Emails → your address.
    - *CI*: **Service Auth**, Include → Service Token → the token from step 5.
 

@@ -9,14 +9,13 @@ The Istio ingress gateway (`ingressgateway.yaml`, release `istio-ingressgateway`
 | Gateway `istio-ingress/public`: one HTTPS server for jithendar.com, www, registry., jfrog.; a TLS server for db.; port 80 redirects | `edge/templates/gateway.yaml` |
 | Wildcard certificate `jithendar.com` + `*.jithendar.com` (DNS-01), Secret `jithendar-com-gateway-tls` | `edge/templates/certificate.yaml` |
 | The jithendar.com routing table: www → apex, redirects, one delegation per path prefix, the site last | `edge/templates/root-virtualservice.yaml`, `edge/values.yaml` `root` |
-| Logins (basic auth) for /prometheus, /loki, /opensearch, /opensearch-dashboards, by path prefix | `edge/templates/basic-auth.yaml`, `basicAuth`; users from Secret `gateway-basic-auth` |
-| /opensearch read-only (GET, HEAD, POST to `_search`/`_msearch`/`_count`) | `edge/templates/read-only.yaml` |
+| Logins (basic auth) for /prometheus, /loki, /redis, by path prefix | `edge/templates/basic-auth.yaml`, `basicAuth`; users from Secret `gateway-basic-auth` |
+| Read-only prefixes (GET, HEAD, POST to listed search suffixes); none since MOKS's OpenSearch was retired | `edge/templates/read-only.yaml`, `readOnly` |
 | Visitor address: PROXY protocol first on 80/443; X-Forwarded-For and X-Real-IP replaced by it | `edge/templates/proxy-protocol.yaml`, `forwarded-for.yaml` |
 | ALPN `postgresql` for postgres.jithendar.com, compression | `edge/templates/tls-alpn.yaml`, `compression.yaml` |
 | Delegates for Kiali and Grafana (their charts only render Ingresses) | `edge/templates/route-*.yaml` |
 
-Each application owns a delegate VirtualService for its prefix (no hosts, no gateways): moks (`/moks`, `/opensearch`,
-`/opensearch-dashboards`), roboshop-ai (`/roboshop`), jithendar.com (the site), Prometheus, Loki, Argo CD and
+Each application owns a delegate VirtualService for its prefix (no hosts, no gateways): moks (`/moks`), roboshop-ai (`/roboshop`), jithendar.com (the site), Prometheus, Loki, Argo CD and
 Vault here. Its own hostname gets its own VirtualService on `istio-ingress/public`: Harbor (registry.), JFrog (jfrog.),
 PostgreSQL (postgres., TCP), Redis (redis., TCP). One root avoids Istio's merge order for VirtualServices of one host: whichever was created first
 would win, and the site's `/` would shadow every later prefix.

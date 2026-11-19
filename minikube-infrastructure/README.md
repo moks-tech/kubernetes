@@ -12,7 +12,7 @@ only the AppProject `mk-platform` and the opt-in `harbor`.
 | `letsencrypt.tf` | `letsencrypt-jithendar` | local `deploy/minikube/cert-manager/issuers` | `cert-manager` | ClusterIssuers `letsencrypt-dns`, `letsencrypt-dns-staging` (DNS-01, Cloudflare); Certificate `jithendar/jithendar-com-wildcard` for `jithendar.com` + `*.jithendar.com` |
 | `istio.tf` | `istio-base`, `istio-cni`, `istiod` | istio-release `base`, `cni`, `istiod` 1.30.7 | `istio-system` | `deploy/minikube/istio/istiod.yaml` |
 | `istio.tf` | `istio-ingressgateway` | istio-release `gateway` 1.30.7 | `istio-ingress` | `deploy/minikube/istio/ingressgateway.yaml`; NodePort 31080 (HTTP) / 31443 (HTTPS), not forwarded from the host |
-| `istio.tf` | `istio-edge` | local `deploy/minikube/istio/edge` | `istio-ingress` | mk4's public edge: Gateway `public`, wildcard certificate, the jithendar.com routing table, logins (from Secret `gateway-basic-auth`), read-only /opensearch, PROXY protocol, compression; Traefik hand-off while `traefik_enabled` ([README](../deploy/minikube/istio/README.md)) |
+| `istio.tf` | `istio-edge` | local `deploy/minikube/istio/edge` | `istio-ingress` | mk4's public edge: Gateway `public`, wildcard certificate, the jithendar.com routing table, logins (from Secret `gateway-basic-auth`), PROXY protocol, compression; Traefik hand-off while `traefik_enabled` ([README](../deploy/minikube/istio/README.md)) |
 | `kiali.tf` | `kiali` | kiali `kiali-server` 2.34.0 | `istio-system` | `deploy/minikube/istio/kiali.yaml`; Secret `kiali-signing-key` |
 | `prometheus.tf` | `prometheus` | local `deploy/minikube/observability/prometheus` | `monitoring` | chart `values.yaml` |
 | `grafana.tf` | `grafana-dashboards`, `grafana` | local `deploy/minikube/observability/grafana/dashboards`; grafana-community `grafana` 14.0.1 | `monitoring` | `deploy/minikube/observability/grafana/values.yaml`; dashboards from `./dashboards` and `../jithendar.com/grafana` |
@@ -72,7 +72,10 @@ time (below).
   `connection_limit` connections (default 50; the server allows 300);
 - a random password, kept in the encrypted Terraform state, in Secret `postgres-db/db-<name>` (the operator reads it);
 - Secret `<ns>/postgres-db-credentials` with `host`, `port`, `dbname`, `username`, `password`, `uri` (all through
-  PgBouncer, `postgres-cluster-pooler-rw.postgres-db.svc:5432`) and `direct-host`, `direct-uri` (the primary itself).
+  PgBouncer, `postgres-cluster-pooler-rw.postgres-db.svc:5432`) and `direct-host`, `direct-uri` (the primary itself);
+- the `extensions` it lists, created by the operator as the superuser: a tenant role cannot create an untrusted
+  extension such as `vector` (pgvector, in the image), so `moks = { …, extensions = ["vector"] }` gives MOKS its
+  vector search. Removing a name leaves the extension installed.
 
 Removing an entry drops the role's Secrets and login; the database stays (`databaseReclaimPolicy: retain`) until
 dropped by hand. Listed today: `jithendar`, `moks`, `registry` (Harbor), `shipping` (RoboShop). Their databases are

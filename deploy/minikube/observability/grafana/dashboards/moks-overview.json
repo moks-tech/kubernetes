@@ -821,7 +821,7 @@
     {
       "id": 1,
       "type": "row",
-      "title": "Knowledge search (OpenSearch)",
+      "title": "Knowledge search",
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -832,146 +832,14 @@
       "panels": []
     },
     {
-      "id": 2,
-      "type": "timeseries",
-      "title": "Cluster up and health (2 green, 1 yellow)",
-      "gridPos": {
-        "h": 7,
-        "w": 8,
-        "x": 0,
-        "y": 59
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "targets": [
-        {
-          "expr": "moks_search_backend{metric=\"up\"}",
-          "legendFormat": "up",
-          "refId": "A"
-        },
-        {
-          "expr": "moks_search_backend{metric=\"health\"}",
-          "legendFormat": "health",
-          "refId": "B"
-        },
-        {
-          "expr": "moks_search_backend{metric=\"unassigned_shards\"}",
-          "legendFormat": "unassigned shards",
-          "refId": "C"
-        }
-      ],
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
-      "id": 3,
-      "type": "timeseries",
-      "title": "JVM heap and GC",
-      "gridPos": {
-        "h": 7,
-        "w": 8,
-        "x": 8,
-        "y": 59
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "targets": [
-        {
-          "expr": "moks_search_backend{metric=\"heap_used_percent\"}",
-          "legendFormat": "heap %",
-          "refId": "A"
-        },
-        {
-          "expr": "rate(moks_search_backend{metric=\"gc_seconds_total\"}[5m])*100",
-          "legendFormat": "GC %",
-          "refId": "B"
-        }
-      ],
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
-      "id": 4,
-      "type": "timeseries",
-      "title": "Disk free on the shared volume",
-      "gridPos": {
-        "h": 7,
-        "w": 8,
-        "x": 16,
-        "y": 59
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "bytes"
-        },
-        "overrides": []
-      },
-      "targets": [
-        {
-          "expr": "moks_search_backend{metric=\"disk_free_bytes\"}",
-          "legendFormat": "free",
-          "refId": "A"
-        },
-        {
-          "expr": "moks_search_backend{metric=\"disk_total_bytes\"}",
-          "legendFormat": "total",
-          "refId": "B"
-        }
-      ],
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
-      "id": 5,
-      "type": "timeseries",
-      "title": "Search latency p95 by kind",
-      "gridPos": {
-        "h": 7,
-        "w": 8,
-        "x": 0,
-        "y": 66
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.95, sum by (le, kind) (rate(moks_opensearch_search_seconds_bucket[5m])))",
-          "legendFormat": "{{kind}}",
-          "refId": "A"
-        }
-      ],
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
       "id": 6,
       "type": "timeseries",
-      "title": "Search failures and fallbacks",
+      "title": "Retrieval fallbacks (answered with less than was asked for)",
       "gridPos": {
         "h": 7,
-        "w": 8,
-        "x": 8,
-        "y": 66
+        "w": 24,
+        "x": 0,
+        "y": 59
       },
       "fieldConfig": {
         "defaults": {
@@ -980,152 +848,10 @@
         "overrides": []
       },
       "targets": [
-        {
-          "expr": "sum by (reason) (rate(moks_opensearch_search_failures_total[5m]))",
-          "legendFormat": "{{reason}}",
-          "refId": "A"
-        },
         {
           "expr": "sum by (reason) (rate(moks_retrieval_fallbacks_total[5m]))",
-          "legendFormat": "fallback: {{reason}}",
-          "refId": "B"
-        }
-      ],
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
-      "id": 7,
-      "type": "timeseries",
-      "title": "Rejected requests",
-      "gridPos": {
-        "h": 7,
-        "w": 8,
-        "x": 16,
-        "y": 66
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "targets": [
-        {
-          "expr": "rate(moks_search_backend{metric=\"search_rejected_total\"}[5m])",
-          "legendFormat": "search",
+          "legendFormat": "{{reason}}",
           "refId": "A"
-        },
-        {
-          "expr": "rate(moks_search_backend{metric=\"write_rejected_total\"}[5m])",
-          "legendFormat": "write",
-          "refId": "B"
-        }
-      ],
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
-      "id": 8,
-      "type": "timeseries",
-      "title": "Bulk items by outcome",
-      "gridPos": {
-        "h": 7,
-        "w": 8,
-        "x": 0,
-        "y": 73
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "targets": [
-        {
-          "expr": "sum by (outcome) (rate(moks_opensearch_bulk_items_total[5m]))",
-          "legendFormat": "{{outcome}}",
-          "refId": "A"
-        }
-      ],
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
-      "id": 9,
-      "type": "timeseries",
-      "title": "Outbox and documents behind",
-      "gridPos": {
-        "h": 7,
-        "w": 8,
-        "x": 8,
-        "y": 73
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "targets": [
-        {
-          "expr": "moks_search_backend{metric=\"outbox_pending\"}",
-          "legendFormat": "pending",
-          "refId": "A"
-        },
-        {
-          "expr": "moks_search_backend{metric=\"outbox_dead\"}",
-          "legendFormat": "dead",
-          "refId": "B"
-        },
-        {
-          "expr": "moks_search_backend{metric=\"documents_behind\"}",
-          "legendFormat": "documents behind",
-          "refId": "C"
-        }
-      ],
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
-      "id": 10,
-      "type": "timeseries",
-      "title": "Vector coverage, reindex, last snapshot age",
-      "gridPos": {
-        "h": 7,
-        "w": 8,
-        "x": 16,
-        "y": 73
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "targets": [
-        {
-          "expr": "moks_search_backend{metric=\"vector_coverage\"}",
-          "legendFormat": "coverage",
-          "refId": "A"
-        },
-        {
-          "expr": "moks_search_backend{metric=\"reindex_running\"}",
-          "legendFormat": "reindex running",
-          "refId": "B"
-        },
-        {
-          "expr": "(time() - moks_search_backend{metric=\"last_snapshot_seconds\"}) / 86400",
-          "legendFormat": "snapshot age (days)",
-          "refId": "C"
         }
       ],
       "datasource": {
@@ -1142,7 +868,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 80
+        "y": 66
       },
       "panels": []
     },
@@ -1154,7 +880,7 @@
         "h": 7,
         "w": 8,
         "x": 0,
-        "y": 81
+        "y": 67
       },
       "fieldConfig": {
         "defaults": {
@@ -1182,7 +908,7 @@
         "h": 7,
         "w": 8,
         "x": 8,
-        "y": 81
+        "y": 67
       },
       "fieldConfig": {
         "defaults": {
@@ -1215,7 +941,7 @@
         "h": 7,
         "w": 8,
         "x": 16,
-        "y": 81
+        "y": 67
       },
       "fieldConfig": {
         "defaults": {
@@ -1248,7 +974,7 @@
         "h": 7,
         "w": 8,
         "x": 0,
-        "y": 88
+        "y": 74
       },
       "fieldConfig": {
         "defaults": {
@@ -1281,7 +1007,7 @@
         "h": 7,
         "w": 8,
         "x": 8,
-        "y": 88
+        "y": 74
       },
       "fieldConfig": {
         "defaults": {
@@ -1314,7 +1040,7 @@
         "h": 7,
         "w": 8,
         "x": 16,
-        "y": 88
+        "y": 74
       },
       "fieldConfig": {
         "defaults": {
@@ -1352,7 +1078,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 95
+        "y": 81
       },
       "datasource": {
         "type": "loki",

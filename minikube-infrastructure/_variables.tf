@@ -60,10 +60,13 @@ variable "postgres_ui_admin_email" {
 }
 
 variable "postgres_databases" {
-  description = "Applications on the shared PostgreSQL cluster (postgres.tf): database and owning login role named by the key, connection Secret postgres-db-credentials written into namespace. Keys are PostgreSQL identifiers."
+  description = "Applications on the shared PostgreSQL cluster (postgres.tf): database and owning login role named by the key, connection Secret postgres-db-credentials written into namespace, extensions the operator installs in that database. Keys are PostgreSQL identifiers."
   type = map(object({
     namespace        = string
     connection_limit = optional(number, 50)
+    # Installed by the operator (superuser): tenant roles cannot create untrusted extensions such as vector (pgvector).
+    # Each must ship in the image (ghcr.io/cloudnative-pg/postgresql:18 has vector). Removing a name leaves it installed.
+    extensions = optional(list(string), [])
   }))
   default = {}
   validation {
