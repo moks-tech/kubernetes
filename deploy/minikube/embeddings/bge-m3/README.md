@@ -44,9 +44,18 @@ Grafana → Platform → **Embeddings (bge-m3)** (`https://jithendar.com/grafana
 `deploy/minikube/observability/grafana/dashboards/platform-embeddings.json`). Ollama exports no metrics of its own,
 so:
 
-- **Traffic** (requests, codes, latency per caller) comes from the callers' Istio sidecars (`istio_requests_total`,
-  `reporter="source"`), which also count requests that never reached the pod. *Vectors/s* is an estimate: response
-  bytes ÷ 12.8 KB, the size of one 1024-dimension vector in Ollama's JSON.
+- **Traffic** (requests, codes, latency per caller) comes from bge-m3's own Istio sidecar (`istio_requests_total`,
+  `reporter="destination"`). Its counters live as long as the bge-m3 pod, so a request still counts after the caller
+  restarts (a caller's sidecar loses its counters with its pod). Requests that never reached the pod are only on the
+  caller's side, so they are added from `reporter="source"` with flags `UH`, `UF`, `UO` or `NR`. *Vectors/s* is an
+  estimate: response bytes ÷ 12.8 KB, the size of one 1024-dimension vector in Ollama's JSON.
+- **First requests count.** A caller's first request (or a code it has not had before) creates a counter that is
+  already at 1 when Prometheus first scrapes it, and `increase()` reads that as 0. The Requests, Failed and p95 stats
+  and `BgeM3RequestsFailing` add the starting value of every series that appears inside the window
+  (`min_over_time(x[w]) unless x offset w`). The rate panels can't do that: one lone request shows in the stats only.
+  A Prometheus gap longer than 5 min at the very start of the window makes old series look new and overcounts.
+- `kubectl port-forward` reaches Ollama on the pod's loopback, past both sidecars, so test calls made that way
+  (`127.0.0.1` in the ollama log; mesh calls show `127.0.0.6`) never appear on the dashboard.
 - **Model in memory**, CPU, memory and network come from cAdvisor (container `ollama`); the volume from the kubelet.
 
 Alerts (`deploy/minikube/observability/prometheus/files/alerts.yml`, group `embeddings`):
