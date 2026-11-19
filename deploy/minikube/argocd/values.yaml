@@ -82,6 +82,19 @@ extraObjects:
             - destination:
                 host: argocd-server.argocd.svc.cluster.local
                 port: {number: 80}
+        # The API answers GETs without Cache-Control, and Cloudflare caches them by URL alone, cookies ignored: one
+        # signed-out /api/v1/session/userinfo sent every reload back to the login page, and a signed-in
+        # /api/v1/clusters was served to anyone. no-store keeps every answer out of Cloudflare and the browser cache.
+        - name: argocd-api
+          match:
+            - uri: {prefix: /argocd/api/}
+          headers:
+            response:
+              set: {cache-control: no-store}
+          route:
+            - destination:
+                host: argocd-server.argocd.svc.cluster.local
+                port: {number: 80}
         - name: argocd
           route:
             - destination:
