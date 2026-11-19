@@ -1,6 +1,8 @@
 """disk-cleanup.sh: what it keeps in Harbor and what it removes from nodes; no cluster, Harbor or SSH."""
 import json
+import os
 from pathlib import Path
+import pty
 import shutil
 import subprocess
 
@@ -93,6 +95,8 @@ method, path = args[args.index('-X') + 1], url.path.removeprefix('/api/v2.0')
 page = int(urllib.parse.parse_qs(url.query).get('page', ['1'])[0])
 with open(os.path.join(state, 'calls'), 'a') as f:
     f.write(json.dumps({'method': method, 'path': path, 'argv': args, 'login': login}) + '\n')
+if login != os.environ['FAKE_LOGIN']:
+    print('curl: (56) The requested URL returned error: 401', file=sys.stderr); sys.exit(56)
 started = os.path.exists(os.path.join(state, 'gc-started'))
 if (method, path) == ('POST', '/system/gc/schedule'):
     open(os.path.join(state, 'gc-started'), 'w').close(); sys.exit(0)
@@ -150,11 +154,25 @@ def fake_harbor(tmp_path):
         {'image': 'registry.jithendar.com/jithendar/seo-agent:latest',
          'imageID': f'registry.jithendar.com/jithendar/seo-agent@{digest(2)}'}]}}]}))
 
-    def run(*args):
+    def run(*args, harbor_login='user = "admin:pw"\n', typed=None, **extra_env):
+        """Harbor accepts only `harbor_login` (the Secret holds pw); `typed` is typed into a terminal on stdin."""
         env = {'PATH': f'{bin_dir}:/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin', 'FAKE_STATE': str(state),
-               'HOME': str(tmp_path)}
-        result = subprocess.run(['bash', str(ROOT / 'disk-cleanup.sh'), '--only', 'harbor', *args],
-                                env=env, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+               'HOME': str(tmp_path), 'FAKE_LOGIN': harbor_login, **extra_env}
+        cmd = ['bash', str(ROOT / 'disk-cleanup.sh'), '--only', 'harbor', *args]
+        if typed is None:
+            result = subprocess.run(cmd, env=env, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        else:   # type only once the prompt is up: read -s drops what was typed ahead (macOS)
+            terminal, stdin = pty.openpty()
+            try:
+                proc = subprocess.Popen(cmd, env=env, stdin=stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                err = b''
+                while b'password for' not in err and proc.poll() is None:
+                    err += os.read(proc.stderr.fileno(), 1024)
+                os.write(terminal, typed.encode())
+                out, rest = proc.communicate(timeout=60)
+                result = subprocess.CompletedProcess(cmd, proc.returncode, out.decode(), (err + rest).decode())
+            finally:
+                os.close(stdin), os.close(terminal)
         log = state / 'calls'
         return result, [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
     return run
@@ -189,3 +207,24 @@ def test_apply_without_a_terminal_needs_yes(fake_harbor):
     result, calls = fake_harbor('--apply')
     assert result.returncode == 1 and 'add --yes' in result.stderr
     assert calls == []
+
+
+def test_a_refused_secret_without_a_terminal_stops_before_any_change(fake_harbor):
+    result, calls = fake_harbor('--apply', '--yes', harbor_login='user = "admin:changed"\n')
+    assert result.returncode == 1 and 'set HARBOR_PASSWORD' in result.stderr
+    assert {c['method'] for c in calls} == {'GET'} and {c['path'] for c in calls} == {'/users/current'}
+
+
+@pytest.mark.parametrize('password, login', [('changed', 'user = "admin:changed"\n'),
+                                             ('a"b\\c', 'user = "admin:a\\"b\\\\c"\n')])
+def test_harbor_password_overrides_the_secret_and_is_quoted_for_curl(fake_harbor, password, login):
+    result, _ = fake_harbor(harbor_login=login, HARBOR_PASSWORD=password)
+    assert result.returncode == 0, result.stderr
+
+
+def test_a_refused_secret_asks_for_the_password_on_the_terminal(fake_harbor):
+    result, calls = fake_harbor('--apply', '--yes', harbor_login='user = "admin:changed"\n', typed='changed\n')
+    assert result.returncode == 0, result.stderr
+    assert "refused admin's password from Secret harbor/harbor-credentials" in result.stdout
+    assert ('POST', '/system/gc/schedule') in [(c['method'], c['path']) for c in calls]
+    assert not any('changed' in a for c in calls for a in c['argv'])
