@@ -66,7 +66,9 @@ extraObjects:
       namespace: argocd
     spec:
       http:
-        # Cloudflare caches by URL alone (cookies and Accept ignored), and gives what it keeps max-age=3600.
+        # Cloudflare caches by URL alone (cookies and Accept ignored), and gives what it keeps max-age=3600. It also
+        # rewrote the page for Rocket Loader (main.*.js left to its loader script): where that loader did not run, the
+        # UI never started, a blank page. no-transform on every answer makes Cloudflare pass Argo CD's bytes as sent.
         #
         # The API answers GETs without Cache-Control: one signed-out /api/v1/session/userinfo sent every reload back to
         # the login page, and a signed-in /api/v1/clusters was served to anyone. no-store keeps every answer out of
@@ -76,7 +78,7 @@ extraObjects:
             - uri: {prefix: /argocd/api/}
           headers:
             response:
-              set: {cache-control: no-store}
+              set: {cache-control: 'no-store, no-transform'}
           route:
             - destination:
                 host: argocd-server.argocd.svc.cluster.local
@@ -90,6 +92,8 @@ extraObjects:
           headers:
             request:
               set: {accept: text/html}
+            response:
+              add: {cache-control: no-transform}
           route:
             - destination:
                 host: argocd-server.argocd.svc.cluster.local
