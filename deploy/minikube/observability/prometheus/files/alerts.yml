@@ -234,3 +234,41 @@ groups:
         annotations:
           summary: 'bge-m3 uses {{ $value | humanizePercentage }} of its memory limit and may be OOM-killed'
           runbook_url: 'https://github.com/moks-tech/kubernetes/blob/master/deploy/minikube/embeddings/bge-m3/README.md#monitoring'
+  # Istio (deploy/minikube/istio): istiod's replicas and every proxy's Envoy stats. Dashboards: Platform / Istio mesh
+  # and Platform / Istio control plane.
+  - name: istio
+    rules:
+      # The injection webhook fails closed: with no istiod, no pod in an injected namespace can be created, and proxies
+      # cannot renew their 24 h certificates.
+      - alert: IstiodDown
+        expr: sum(up{job="istiod"}) == 0 or absent(up{job="istiod"})
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'No istiod replica answers; pods in injected namespaces cannot be created'
+          runbook_url: 'https://github.com/moks-tech/kubernetes/blob/master/deploy/minikube/istio/README.md#monitoring'
+      - alert: IstiodReplicaDown
+        expr: up{job="istiod"} == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'istiod {{ $labels.pod }} is down; the other replica serves every proxy alone'
+          runbook_url: 'https://github.com/moks-tech/kubernetes/blob/master/deploy/minikube/istio/README.md#monitoring'
+      - alert: IstioProxyNotScraped
+        expr: up{job="envoy-stats"} == 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Prometheus cannot read the Envoy stats of {{ $labels.namespace }}/{{ $labels.pod }}; its traffic is missing from Kiali and Grafana'
+          runbook_url: 'https://github.com/moks-tech/kubernetes/blob/master/deploy/minikube/istio/README.md#monitoring'
+      # A proxy that refuses a push (NACK) keeps running on the last configuration it accepted.
+      - alert: IstioConfigRejected
+        expr: sum(increase(pilot_total_xds_rejects{job="istiod"}[15m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Proxies rejected {{ $value | humanize }} configuration pushes from istiod in 15 min'
+          runbook_url: 'https://github.com/moks-tech/kubernetes/blob/master/deploy/minikube/istio/README.md#monitoring'

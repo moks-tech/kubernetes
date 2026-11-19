@@ -119,8 +119,8 @@ datasources:
             query: '{namespace=~"jithendar|moks"} |= "trace_id=$${__trace.traceId}"'
 
 # The ConfigMaps come from the grafana-dashboards release (minikube-infrastructure/grafana.tf): RoboShop, MOKS and
-# Platform (the shared PostgreSQL and Redis clusters, bge-m3 embeddings) from ./dashboards, Jithendar.com from the
-# jithendar.com checkout's grafana/ folder.
+# Platform (the shared PostgreSQL and Redis clusters, bge-m3 embeddings, the Istio mesh and istiod) from ./dashboards,
+# Jithendar.com from the jithendar.com checkout's grafana/ folder.
 dashboardProviders:
   dashboardproviders.yaml:
     apiVersion: 1

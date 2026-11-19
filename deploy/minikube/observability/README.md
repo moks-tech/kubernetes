@@ -9,7 +9,7 @@ built from this directory. Terraform applies the local checkout, not `master`.
 | Dashboards | Grafana (community chart 14.0.1) | `grafana` | `monitoring` | [`grafana/values.yaml`](grafana/README.md) |
 | Logs | Loki 3.7.9 + Alloy 1.21.2 | `loki` | `monitoring` | [`loki/`](loki/README.md) (local Helm chart) |
 | Traces | OpenTelemetry Collector 0.162 → Jaeger 2.22 | `otel-collector`, `jaeger` | `observability` | [`otel-collector/`](otel-collector/), [`jaeger/`](jaeger/) (local Helm charts, `jaeger.yaml`), [design notes](opentelemetry/README.md) |
-| Mesh | Kiali 2.34 on Istio 1.30.7 | `kiali`, `istiod`, `istio-base` | `istio-system` | [`../istio/`](../istio/) |
+| Mesh | Kiali 2.34 on Istio 1.30.7; Grafana Platform · Istio mesh / control plane | `kiali`, `istiod`, `istio-base` | `istio-system` | [`../istio/`](../istio/README.md#monitoring) |
 
 ```bash
 terraform -chdir=minikube-infrastructure apply -var-file=vars/mk4.tfvars
@@ -21,6 +21,9 @@ terraform -chdir=minikube-infrastructure apply -var-file=vars/mk4.tfvars
   services' `/metrics` endpoints (job `roboshop`), Loki and Alloy. Alert rules in
   `prometheus/files/alerts.yml` are evaluated and shown under **Alerts**. No
   Alertmanager is installed, so alerts are not delivered anywhere.
+- **Istio**: Prometheus scrapes each istiod replica (job `istiod`) and every sidecar's and gateway's Envoy stats
+  (job `envoy-stats`, `:15090`, which bypasses Prometheus's own sidecar). Kiali and Grafana's **Platform · Istio
+  mesh** and **Platform · Istio control plane** read them; see [Istio monitoring](../istio/README.md#monitoring).
 - **Alloy** tails pod logs from `roboshop-ai`, `traefik` and `observability`
   through the Kubernetes API, keeps only sanitized `event`/`level`/`trace_id`
   fields, and pushes to Loki.
