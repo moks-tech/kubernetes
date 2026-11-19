@@ -134,6 +134,10 @@ First sign-in: `https://registry.jithendar.com/harbor/`, user `admin`. Read the 
 kubectl --context mk4 -n harbor get secret harbor-credentials -o jsonpath='{.data.HARBOR_ADMIN_PASSWORD}' | base64 -d; echo
 ```
 
+Harbor reads that password only on its first start. If you change it in the portal, the Secret stops working for the
+API calls below and `disk-cleanup.sh` (which then asks for the password). To bring them back in line, sign in and
+change the admin password (top right, **Change Password**) back to the Secret's value.
+
 ## Verify
 
 ```bash

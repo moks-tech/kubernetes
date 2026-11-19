@@ -15,7 +15,8 @@
 #
 # Cluster: KUBE_CONTEXT, else the current context. SSH: SSH_USER (root), SSH_KEY (~/.ssh/hetzner_k3s), each node's
 # ExternalIP. Harbor: HARBOR_URL (https://registry.jithendar.com), HARBOR_USER and HARBOR_PASSWORD (default: admin from
-# Secret harbor/harbor-credentials, handed to curl on stdin). Needs kubectl, jq, curl and ssh.
+# Secret harbor/harbor-credentials; if Harbor refuses it, asked for on the terminal). The login reaches curl on stdin.
+# Needs kubectl, jq, curl and ssh.
 set -Eeuo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -93,17 +94,34 @@ harbor_all() {   # harbor_all PATH: every page of a list endpoint, as one JSON a
   done | jq -s .
 }
 
-harbor_login() {
-  local user="${HARBOR_USER:-admin}" password="${HARBOR_PASSWORD:-}" login
-  if [[ -z $password ]]; then
-    password="$(k -n harbor get secret harbor-credentials -o jsonpath='{.data.HARBOR_ADMIN_PASSWORD}' | base64 -d)"
-  fi
-  [[ -n $password ]] || { echo 'No Harbor password: set HARBOR_PASSWORD.' >&2; exit 1; }
-  login="$user:$password"
+set_login() {   # set_login USER PASSWORD: the curl config line, quoted for curl
+  local login="$1:$2"
   login="${login//\\/\\\\}"
   login="${login//\"/\\\"}"
   CURL_LOGIN="user = \"$login\""
-  harbor GET /users/current >/dev/null || { echo "Harbor login as $user failed at $HARBOR_URL." >&2; exit 1; }
+}
+
+# HARBOR_PASSWORD, else the Secret. Harbor reads the Secret only on its first start, so after a password change in the
+# portal it is refused: then the password is asked for on a terminal (not echoed, never in argv or the environment).
+harbor_login() {
+  local user="${HARBOR_USER:-admin}" password="${HARBOR_PASSWORD:-}" from=HARBOR_PASSWORD
+  if [[ -z $password ]]; then
+    from='Secret harbor/harbor-credentials'
+    password="$(k -n harbor get secret harbor-credentials -o jsonpath='{.data.HARBOR_ADMIN_PASSWORD}' | base64 -d)"
+  fi
+  if [[ -n $password ]]; then
+    set_login "$user" "$password"
+    if harbor GET /users/current >/dev/null 2>&1; then return 0; fi
+    echo "  Harbor refused $user's password from $from (changed in the portal since?)."
+  fi
+  if [[ ! -t 0 ]]; then
+    echo "Harbor login as $user failed at $HARBOR_URL: run on a terminal to type the password, or set HARBOR_PASSWORD." >&2
+    exit 1
+  fi
+  read -r -s -p "  Harbor password for $user (not shown): " password
+  echo
+  set_login "$user" "$password"
+  harbor GET /users/current >/dev/null 2>&1 || { echo "Harbor login as $user failed at $HARBOR_URL." >&2; exit 1; }
 }
 
 harbor_gc() {
