@@ -66,25 +66,11 @@ extraObjects:
       namespace: argocd
     spec:
       http:
-        # The UI's entry page: Argo CD answers one URL two ways. A request that accepts text/html gets index.html with
-        # <base href="/argocd/"> and Cache-Control no-cache, private; any other (curl, a probe: Accept */*) gets the
-        # file as built, <base href="/"> and no Cache-Control. Cloudflare caches /argocd/ by URL alone, so after one
-        # such request browsers were served that copy, loaded main.*.js from / (a 404) and showed a blank page, and
-        # kept it for an hour (max-age=3600). With Accept forced, every answer is the rewritten, uncacheable one.
-        - name: argocd-index
-          match:
-            - uri: {exact: /argocd/}
-            - uri: {exact: /argocd/index.html}
-          headers:
-            request:
-              set: {accept: text/html}
-          route:
-            - destination:
-                host: argocd-server.argocd.svc.cluster.local
-                port: {number: 80}
-        # The API answers GETs without Cache-Control, and Cloudflare caches them by URL alone, cookies ignored: one
-        # signed-out /api/v1/session/userinfo sent every reload back to the login page, and a signed-in
-        # /api/v1/clusters was served to anyone. no-store keeps every answer out of Cloudflare and the browser cache.
+        # Cloudflare caches by URL alone (cookies and Accept ignored), and gives what it keeps max-age=3600.
+        #
+        # The API answers GETs without Cache-Control: one signed-out /api/v1/session/userinfo sent every reload back to
+        # the login page, and a signed-in /api/v1/clusters was served to anyone. no-store keeps every answer out of
+        # Cloudflare and the browser cache.
         - name: argocd-api
           match:
             - uri: {prefix: /argocd/api/}
@@ -95,7 +81,15 @@ extraObjects:
             - destination:
                 host: argocd-server.argocd.svc.cluster.local
                 port: {number: 80}
+        # The UI's pages (/argocd/, /argocd/applications, ...): Argo CD answers each two ways. A request that accepts
+        # text/html gets index.html with <base href="/argocd/"> and Cache-Control no-cache, private; any other (curl, a
+        # probe: Accept */*) gets the file as built (<base href="/">, so main.*.js loads from / and 404s: a blank page)
+        # or a 404, both cacheable, and Cloudflare then served that to browsers. With Accept forced every page is the
+        # rewritten, uncacheable one; files (a "." in the path) are served as before, whatever the Accept.
         - name: argocd
+          headers:
+            request:
+              set: {accept: text/html}
           route:
             - destination:
                 host: argocd-server.argocd.svc.cluster.local
