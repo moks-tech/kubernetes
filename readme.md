@@ -28,7 +28,7 @@ Every entry point can run from any directory, and most accept `--help`.
 | `./create-secrets.sh [--apply] [--all]` | Create missing installation credentials. Never rotates existing ones. |
 | `./deploy-argocd.sh [app\|all\|roboshop\|list\|status]` | Register and sync Argo CD Applications. |
 | `./harbor-pull-secret.sh [context]` | Create or rotate Secret `harbor-pull` (registry.jithendar.com) in every active namespace. |
-| `./disk-cleanup.sh [--apply] [--keep N] [--only pods,harbor,nodes]` | Free disk on mk4: finished pods; old Harbor builds (keeps the newest 2 of each repository, `latest` and anything running) and Harbor GC; unused images, journald and apt's cache on every node over SSH. A dry run unless `--apply`. |
+| `./disk-cleanup.sh [--apply] [--keep N] [--only pods,nodes,harbor]` | Free disk on mk4: finished pods; unused images, journald and apt's cache on every node over SSH; every untagged Harbor artifact and all but the newest 2 tagged of each repository (never `latest` or a pinned digest), then Harbor GC. Shows each node's disk and the Harbor volume before and after, with a summary table. A dry run unless `--apply`. |
 | `scripts/setup-minikube-terraform-ci.sh` | One-time access for the Terraform workflow ([minikube-infrastructure/README.md](minikube-infrastructure/README.md#ci)). |
 | `scripts/data/seed-minikube-demo.py` | Opt-in synthetic demo data. |
 | `scripts/reset-mongo-password.sh` | Reset the RoboShop MongoDB password on mk4. |

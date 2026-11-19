@@ -7,11 +7,15 @@
 #
 # pods    Finished pods (Succeeded, Failed, evicted) in every namespace. Their exited containers would keep crictl
 #         from removing the images they used.
-# harbor  Each repository of each project keeps its newest --keep pushes (default 2, tagged or not), the artifact
-#         tagged latest and every digest a pod runs or a workload pins; the rest are deleted. Garbage collection then
-#         frees the volume (not 02:15-03:45 UTC, the backup window). GC leaves blobs pushed in the last two hours.
 # nodes   On every node over SSH: k3s crictl rmi --prune (images no container uses), journald down to 200M,
-#         apt-get clean. local-path folders without a PersistentVolume are listed, never deleted.
+#         apt-get clean; each node's disk, images, journald and apt cache before and after. local-path folders
+#         without a PersistentVolume are listed, never deleted.
+# harbor  Every untagged artifact is deleted; of the tagged ones each repository keeps the newest --keep (default 2)
+#         and the one tagged latest. A digest a workload pins (image@sha256:...) is always kept. Garbage collection
+#         then frees the volume (not 02:15-03:45 UTC, the backup window); it leaves blobs pushed in the last two hours.
+#
+# Ends with a table of each node's disk and the Harbor volume, before and after (in a dry run: now, and what --apply
+# could free).
 #
 # Cluster: KUBE_CONTEXT, else the current context. SSH: SSH_USER (root), SSH_KEY (~/.ssh/hetzner_k3s), each node's
 # ExternalIP. Harbor: HARBOR_URL (https://registry.jithendar.com), HARBOR_USER and HARBOR_PASSWORD (default: admin from
@@ -21,7 +25,7 @@ set -Eeuo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 LIB="$ROOT/scripts/lib"
-APPLY=false YES=false KEEP=2 ONLY=pods,harbor,nodes FAILED=0
+APPLY=false YES=false KEEP=2 ONLY=pods,nodes,harbor FAILED=0
 
 usage() { awk 'NR == 1 {next} /^#/ {sub(/^# ?/, ""); print; next} {exit}' "${BASH_SOURCE[0]}"; }
 while (($#)); do
@@ -51,9 +55,55 @@ k() { kubectl --context "$CONTEXT" --request-timeout=60s "$@"; }
 step() { [[ ",$ONLY," == *",$1,"* ]]; }
 section() { printf '\n== %s\n' "$*"; }
 fail() { echo "$*" >&2; FAILED=$((FAILED + 1)); }
-human() {
-  awk -v b="${1:-0}" 'BEGIN { split("B KiB MiB GiB TiB", u, " "); i = 1
-    while (b >= 1024 && i < 5) { b /= 1024; i++ }; printf "%.1f %s", b, u[i] }'
+human() {   # human BYTES (may be negative)
+  awk -v b="${1:-0}" 'BEGIN { s = ""; if (b < 0) { s = "-"; b = -b }; split("B KiB MiB GiB TiB", u, " "); i = 1
+    while (b >= 1024 && i < 5) { b /= 1024; i++ }; printf "%s%.1f %s", s, b, u[i] }'
+}
+pct() { echo $((($1 * 100 + $2 / 2) / $2)); }   # pct PART TOTAL, rounded
+used_pct() {   # used_pct USED [TOTAL]: "60.0 GiB (83%)"
+  if [[ -z ${2:-} || ${2:-0} == 0 ]]; then human "$1"; return; fi
+  printf '%s (%s%%)' "$(human "$1")" "$(pct "$1" "$2")"
+}
+REGISTRY_HOST=''
+
+# Summary rows: name, used before, disk size (for the percentage; empty for a volume), used after (apply), and the
+# estimate of what --apply frees (dry run). Sizes in bytes; empty when unknown.
+ROW_NAME=() ROW_BEFORE=() ROW_SIZE=() ROW_AFTER=() ROW_ESTIMATE=()
+add_row() { ROW_NAME+=("$1"); ROW_BEFORE+=("$2"); ROW_SIZE+=("$3"); ROW_AFTER+=("$4"); ROW_ESTIMATE+=("$5"); }
+row() { printf '  %-34s  %-18s  %-18s  %s\n' "$@"; }
+
+print_summary() {
+  local i total=0 freed
+  ((${#ROW_NAME[@]})) || return 0
+  if $APPLY; then
+    section 'Summary: used disk before and after'
+    row '' before after freed
+    for i in "${!ROW_NAME[@]}"; do
+      if [[ -n ${ROW_BEFORE[i]} && -n ${ROW_AFTER[i]} ]]; then
+        freed=$((ROW_BEFORE[i] - ROW_AFTER[i]))
+        total=$((total + freed))
+        row "${ROW_NAME[i]}" "$(used_pct "${ROW_BEFORE[i]}" "${ROW_SIZE[i]}")" \
+          "$(used_pct "${ROW_AFTER[i]}" "${ROW_SIZE[i]}")" "$(human "$freed")"
+      else
+        row "${ROW_NAME[i]}" "${ROW_BEFORE[i]:+$(used_pct "${ROW_BEFORE[i]}" "${ROW_SIZE[i]}")}" '?' '?'
+      fi
+    done
+    row 'total freed' '' '' "$(human "$total")"
+    if step nodes && [[ -n $REGISTRY_HOST ]]; then
+      echo "  Harbor's volume is on $REGISTRY_HOST, measured before Harbor's GC, so the rows add up."
+    fi
+  else
+    section 'Summary: used disk now, and what --apply could free'
+    row '' 'used now' 'could free'
+    for i in "${!ROW_NAME[@]}"; do
+      total=$((total + ${ROW_ESTIMATE[i]:-0}))
+      row "${ROW_NAME[i]}" "${ROW_BEFORE[i]:+$(used_pct "${ROW_BEFORE[i]}" "${ROW_SIZE[i]}")}" \
+        "${ROW_ESTIMATE[i]:+~$(human "${ROW_ESTIMATE[i]}")}"
+    done
+    row 'total' '' "~$(human "$total")"
+    echo '  Estimates: images count compressed (they free more unpacked); Harbor counts every deleted build in full'
+    echo '  (builds share layers, so GC frees less).'
+  fi
 }
 
 # --- finished pods ----------------------------------------------------------------------------------------------------
@@ -68,6 +118,88 @@ clean_pods() {
     while IFS= read -r pod; do echo "    $pod"; done <<<"$list"
     if $APPLY; then k delete pods -A --field-selector="status.phase==$phase" --wait=false | sed 's/^/    /'; fi
   done
+}
+
+# --- nodes ------------------------------------------------------------------------------------------------------------
+SSH_USER="${SSH_USER:-root}"
+SSH_KEY="${SSH_KEY:-$HOME/.ssh/hetzner_k3s}"
+JOURNAL_LIMIT=$((200 * 1024 * 1024))   # journalctl --vacuum-size=200M in node-disk-cleanup.sh
+
+on_node() {   # on_node IP [ARGS...] <script: runs the script on stdin with bash on the node, as root
+  local ip=$1 sudo='' args=''
+  shift
+  if [[ $SSH_USER != root ]]; then sudo='sudo -n'; fi
+  if (($#)); then args="$(printf '%q ' "$@")"; fi
+  ssh -i "$SSH_KEY" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new \
+    "$SSH_USER@$ip" "$sudo bash -s -- $args"
+}
+
+clean_nodes() {
+  section "Nodes (SSH as $SSH_USER, key $SSH_KEY)"
+  local node ip n images pv key a b estimate extra mode=report pvs=()
+  local used avail journal apt removed journal_after apt_after used_after avail_after
+  if $APPLY; then mode=apply; fi
+  while IFS= read -r pv; do [[ -z $pv ]] || pvs+=("$pv"); done \
+    < <(k get pv -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')
+  k get nodes -o json | jq -r '.items[] | .metadata.name + "\t" + ([.status.addresses[] | select(.type == "ExternalIP")][0].address // [.status.addresses[] | select(.type == "InternalIP")][0].address)' \
+    >"$WORK/nodes"
+  while IFS=$'\t' read -r -u 3 node ip; do
+    echo
+    echo "  -- $node ($ip)"
+    if ! on_node "$ip" <<<'k3s crictl images -o json' >"$WORK/images.json" 2>"$WORK/ssh.err" ||
+      ! on_node "$ip" <<<'k3s crictl ps -a -o json' >"$WORK/containers.json" 2>"$WORK/ssh.err"; then
+      fail "    SSH failed: $(tail -n 1 "$WORK/ssh.err")"
+      add_row "$node" '' '' '' ''
+      continue
+    fi
+    jq -n --slurpfile i "$WORK/images.json" --slurpfile c "$WORK/containers.json" -f "$LIB/unused-images.jq" \
+      >"$WORK/unused.json"
+    n="$(jq length "$WORK/unused.json")"
+    images="$(jq 'map(.size) | add // 0' "$WORK/unused.json")"
+    if $APPLY; then echo "    removing $n unused images, journald above 200M and apt's cache ..."; fi
+    if ! on_node "$ip" "$mode" ${pvs[@]+"${pvs[@]}"} <"$LIB/node-disk-cleanup.sh" >"$WORK/node.out" 2>"$WORK/ssh.err"; then
+      fail "    cleanup on $node failed: $(tail -n 1 "$WORK/ssh.err")"
+      add_row "$node" '' '' '' ''
+      continue
+    fi
+    used='' avail='' journal=0 apt=0 removed='' journal_after='' apt_after='' used_after='' avail_after=''
+    : >"$WORK/node.notes"
+    while read -r key a b; do
+      case $key in
+        disk) used=$a avail=$b ;;
+        journal) journal=$a ;;
+        apt) apt=$a ;;
+        orphan) echo "    no PersistentVolume  $(human "$a")  $b  (left in place)" >>"$WORK/node.notes" ;;
+        orphans) echo '    local-path folders  not checked (no PersistentVolume list)' >>"$WORK/node.notes" ;;
+        removed) removed=$a ;;
+        journal_after) journal_after=$a ;;
+        apt_after) apt_after=$a ;;
+        disk_after) used_after=$a avail_after=$b ;;
+        error) fail "    $node: $a $b" ;;
+      esac
+    done <"$WORK/node.out"
+    if [[ -z $used ]]; then fail "    no disk figures from $node"; add_row "$node" '' '' '' ''; continue; fi
+
+    echo "    disk          $(human "$used") used of $(human $((used + avail))), $(human "$avail") free ($(pct "$used" $((used + avail)))%)"
+    echo "    images        $n unused, $(human "$images") compressed (more once unpacked)"
+    jq -r '.[:25][] | "\(.size)\t\(.name)"' "$WORK/unused.json" |
+      while IFS=$'\t' read -r a b; do printf '                  %10s  %s\n' "$(human "$a")" "$b"; done
+    if ((n > 25)); then echo "                  ... and $((n - 25)) more"; fi
+    echo "    journald      $(human "$journal")   apt cache  $(human "$apt")"
+    cat "$WORK/node.notes"
+    if $APPLY; then
+      echo "    removed       ${removed:-?} images; journald $(human "$journal") -> $(human "${journal_after:-0}"); apt cache $(human "$apt") -> $(human "${apt_after:-0}")"
+      if [[ -n $used_after ]]; then
+        echo "    disk after    $(human "$used_after") used, $(human "$avail_after") free: freed $(human $((used - used_after)))"
+      fi
+      add_row "$node" "$used" $((used + avail)) "$used_after" ''
+    else
+      extra=$((journal > JOURNAL_LIMIT ? journal - JOURNAL_LIMIT : 0))
+      estimate=$((images + extra + apt))
+      echo "    could free    ~$(human "$estimate") (images $(human "$images"), journald $(human "$extra"), apt cache $(human "$apt"))"
+      add_row "$node" "$used" $((used + avail)) '' "$estimate"
+    fi
+  done 3<"$WORK/nodes"
 }
 
 # --- Harbor -----------------------------------------------------------------------------------------------------------
@@ -124,6 +256,13 @@ harbor_login() {
   harbor GET /users/current >/dev/null 2>&1 || { echo "Harbor login as $user failed at $HARBOR_URL." >&2; exit 1; }
 }
 
+registry_bytes() {   # bytes in the registry volume (du in the registry container); nothing when unknown
+  local kib
+  kib="$(k -n harbor exec deploy/harbor-registry -c registry -- du -sk /storage 2>/dev/null || true)"
+  kib="${kib%%[[:space:]]*}"
+  if [[ $kib =~ ^[0-9]+$ ]]; then echo $((kib * 1024)); fi
+}
+
 harbor_gc() {
   local now last job id=0 status='' i
   now="$(date -u +%H%M)"
@@ -152,16 +291,20 @@ harbor_gc() {
 }
 
 clean_harbor() {
-  section "Harbor $HARBOR_URL: keep the newest $KEEP pushes of each repository"
+  section "Harbor $HARBOR_URL: delete untagged artifacts, keep the newest $KEEP tagged of each repository"
   harbor_login
-  # Every digest a pod runs (imageID) or a workload pins (image@sha256:...), old ReplicaSets included.
-  k get pods,deployments,statefulsets,daemonsets,replicasets,jobs,cronjobs -A -o json |
-    jq '[.. | objects | (.image?, .imageID?) | strings | scan("sha256:[0-9a-f]{64}")] | map({(.): true}) | add // {}' \
-      >"$WORK/inuse.json"
-  echo "  digests that pods run or workloads pin: $(jq length "$WORK/inuse.json")"
-
-  local project repo count name path n size d deleted=0 bytes=0 verb='to delete'
+  local before after shown project repo count name path n size d deleted=0 bytes=0 verb='to delete'
   if $APPLY; then verb='deleted'; fi
+  REGISTRY_HOST="$(k -n harbor get pods -l component=registry -o jsonpath='{.items[0].spec.nodeName}' 2>/dev/null || true)"
+  before="$(registry_bytes)"
+  if [[ -n $before ]]; then shown="$(human "$before")"; else shown='unknown (du in the registry container failed)'; fi
+  echo "  registry volume: $shown${REGISTRY_HOST:+ (on $REGISTRY_HOST)}"
+  # Digests that a workload pins (image@sha256:...), old ReplicaSets included. A pod that runs a tag pulls the tag.
+  k get pods,deployments,statefulsets,daemonsets,replicasets,jobs,cronjobs -A -o json |
+    jq '[.. | objects | .image? | strings | scan("sha256:[0-9a-f]{64}")] | map({(.): true}) | add // {}' \
+      >"$WORK/inuse.json"
+  echo "  digests that workloads pin: $(jq length "$WORK/inuse.json")"
+
   harbor_all /projects | jq -r '.[].name' >"$WORK/projects"
   while IFS= read -r -u 3 project; do
     harbor_all "/projects/$project/repositories" | jq -r '.[] | [.name, .artifact_count] | @tsv' >"$WORK/repos"
@@ -192,51 +335,21 @@ clean_harbor() {
   done 3<"$WORK/projects"
   echo "  total: $deleted artifacts $verb, up to $(human "$bytes") (builds share layers, so GC frees less)"
   harbor_gc
-}
-
-# --- nodes ------------------------------------------------------------------------------------------------------------
-SSH_USER="${SSH_USER:-root}"
-SSH_KEY="${SSH_KEY:-$HOME/.ssh/hetzner_k3s}"
-
-on_node() {   # on_node IP [ARGS...] <script: runs the script on stdin with bash on the node, as root
-  local ip=$1 sudo='' args=''
-  shift
-  if [[ $SSH_USER != root ]]; then sudo='sudo -n'; fi
-  if (($#)); then args="$(printf '%q ' "$@")"; fi
-  ssh -i "$SSH_KEY" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new \
-    "$SSH_USER@$ip" "$sudo bash -s -- $args"
-}
-
-clean_nodes() {
-  section "Nodes (SSH as $SSH_USER, key $SSH_KEY)"
-  local node ip n size pv mode=report pvs=()
-  if $APPLY; then mode=apply; fi
-  while IFS= read -r pv; do [[ -z $pv ]] || pvs+=("$pv"); done \
-    < <(k get pv -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')
-  k get nodes -o json | jq -r '.items[] | .metadata.name + "\t" + ([.status.addresses[] | select(.type == "ExternalIP")][0].address // [.status.addresses[] | select(.type == "InternalIP")][0].address)' \
-    >"$WORK/nodes"
-  while IFS=$'\t' read -r -u 3 node ip; do
-    echo "  -- $node ($ip)"
-    if ! on_node "$ip" <<<'k3s crictl images -o json' >"$WORK/images.json" 2>"$WORK/ssh.err" ||
-      ! on_node "$ip" <<<'k3s crictl ps -a -o json' >"$WORK/containers.json" 2>"$WORK/ssh.err"; then
-      fail "    SSH failed: $(tail -n 1 "$WORK/ssh.err")"
-      continue
+  if $APPLY; then
+    after="$(registry_bytes)"
+    if [[ -n $before && -n $after ]]; then
+      echo "  registry volume: $(human "$before") -> $(human "$after"), freed $(human $((before - after)))"
     fi
-    jq -n --slurpfile i "$WORK/images.json" --slurpfile c "$WORK/containers.json" -f "$LIB/unused-images.jq" \
-      >"$WORK/unused.json"
-    n="$(jq length "$WORK/unused.json")"
-    size="$(jq 'map(.size) | add // 0' "$WORK/unused.json")"
-    echo "    images no container uses: $n, $(human "$size") compressed (more on disk)$($APPLY && echo ', removing' || true)"
-    jq -r '.[:25][] | "      \(.name)"' "$WORK/unused.json"
-    if ((n > 25)); then echo "      ... and $((n - 25)) more"; fi
-    on_node "$ip" "$mode" ${pvs[@]+"${pvs[@]}"} <"$LIB/node-disk-cleanup.sh" || fail "    cleanup on $node failed"
-  done 3<"$WORK/nodes"
+    add_row "Harbor registry volume" "$before" '' "$after" ''
+  else
+    add_row "Harbor registry volume" "$before" '' '' "$bytes"
+  fi
 }
 
 # --- run --------------------------------------------------------------------------------------------------------------
 k get --raw /readyz >/dev/null || { echo "Cannot reach context '$CONTEXT'." >&2; exit 1; }
 if $APPLY; then
-  echo "APPLY on context '$CONTEXT': $ONLY (Harbor keeps $KEEP per repository)."
+  echo "APPLY on context '$CONTEXT': $ONLY (Harbor: untagged artifacts go, $KEEP tagged kept per repository)."
   if ! $YES; then
     [[ -t 0 ]] || { echo 'No terminal to confirm on: add --yes.' >&2; exit 1; }
     read -r -p 'Type the context name to continue: ' answer
@@ -246,10 +359,12 @@ else
   echo "DRY RUN on context '$CONTEXT': nothing changes. Add --apply to remove what is listed."
 fi
 
+# Nodes before Harbor: each node's figures then leave out Harbor's GC, and the Harbor row adds it once.
 if step pods; then clean_pods; fi
-if step harbor; then clean_harbor; fi
 if step nodes; then clean_nodes; fi
+if step harbor; then clean_harbor; fi
 
+print_summary
 section Done
 if ((FAILED)); then echo "$FAILED problem(s); see the messages above." >&2; exit 1; fi
 if ! $APPLY; then echo 'Dry run: nothing was changed. Run again with --apply.'; fi

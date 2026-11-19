@@ -278,9 +278,11 @@ harbor POST /system/gc/schedule -d '{"schedule":{"type":"Custom","cron":"0 0 4 *
 (A schedule that already exists is changed with `PUT` on the same path.)
 
 **By hand, when the disk is tight:** `./disk-cleanup.sh --only harbor` (repository root) lists, for every repository
-of every project, what goes when only the newest two pushes are kept, plus the artifact tagged `latest` and every digest
-a pod runs or a workload pins. `--apply` deletes the rest and runs GC straight away. That shortens the rollback window
-above to the previous build; `--keep N` keeps more.
+of every project, what goes: **every untagged artifact**, and of the tagged ones all but the newest two and the one
+tagged `latest`. A digest a workload pins (`image@sha256:…`) is always kept; pods that run `:latest` are not, because
+they pull the tag again. `--apply` deletes the rest, runs GC straight away and shows the registry volume before and
+after. With `:latest`-only pushes that leaves one build per repository: no rollback window above until the next push
+(`--keep N` keeps more tagged builds, not untagged ones).
 
 ## Trivy
 
