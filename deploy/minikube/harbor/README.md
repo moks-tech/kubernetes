@@ -273,6 +273,11 @@ harbor POST /system/gc/schedule -d '{"schedule":{"type":"Custom","cron":"0 0 4 *
 
 (A schedule that already exists is changed with `PUT` on the same path.)
 
+**By hand, when the disk is tight:** `./disk-cleanup.sh --only harbor` (repository root) lists, for every repository
+of every project, what goes when only the newest two pushes are kept, plus the artifact tagged `latest` and every digest
+a pod runs or a workload pins. `--apply` deletes the rest and runs GC straight away. That shortens the rollback window
+above to the previous build; `--keep N` keeps more.
+
 ## Trivy
 
 Off by default (`trivy.enabled: false`). To enable: set `trivy.enabled: true` in `values.yaml`, merge, and run
