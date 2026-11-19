@@ -45,11 +45,24 @@ data:
       {{- end }}
       {{- end }}
       {{- if and .Values.kubernetesMetrics.enabled .Values.istioMetrics.enabled }}
-      # Istio control plane and sidecars (Kiali, https://jithendar.com/kiali/). Same jobs as Istio's samples/addons
-      # prometheus.yaml. Sidecars exist only in namespaces labelled istio-injection=enabled.
+      # Istio control plane and sidecars, for Kiali (https://jithendar.com/kiali/) and Grafana's Platform · Istio mesh
+      # and Platform · Istio control plane. Sidecars exist only in namespaces labelled istio-injection=enabled.
+      # Every istiod replica (istiod.yaml: 2), through this pod's sidecar as plain text (istiod has none). Through the
+      # Service a scrape reached one replica at random, so per-replica gauges such as pilot_xds (proxies connected to
+      # that replica) jumped between the two.
       - job_name: istiod
-        static_configs:
-          - targets: ["istiod.istio-system.svc.cluster.local:15014"]
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: [istio-system]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app, __meta_kubernetes_pod_container_port_name]
+            action: keep
+            regex: istiod;http-monitoring
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
       - job_name: envoy-stats
         metrics_path: /stats/prometheus
         kubernetes_sd_configs:
@@ -58,15 +71,28 @@ data:
           - source_labels: [__meta_kubernetes_pod_container_port_name]
             action: keep
             regex: '.*-envoy-prom'
+          # A finished Job's pod (news-dispatch, ...) keeps its address, but nothing listens there any more.
+          - source_labels: [__meta_kubernetes_pod_phase]
+            action: drop
+            regex: Succeeded|Failed
           - source_labels: [__meta_kubernetes_namespace]
             target_label: namespace
           - source_labels: [__meta_kubernetes_pod_name]
             target_label: pod
-        # Prometheus is meshed, so its scrapes of application ports (moks :9464, seo-agent :8080, ...) are themselves
-        # reported as Istio request telemetry by the targets' sidecars: series that grow with each target and
-        # OOM-killed Prometheus on 2026-11-18. Drop them. (Most of those ~100k series were Prometheus's own sidecar
-        # stats repeated once per target; excludeOutboundPorts in prometheus-deployment.yaml fixed that.)
         metric_relabel_configs:
+          # Istio's request telemetry (istio_*) and the AuthorizationPolicy counters (envoy_http_rbac, envoy_tcp: what
+          # a dry-run policy would deny, Platform · Istio mesh). Dropped: Envoy's ~430 internal series per proxy and
+          # the request/response size histograms (_sum and _count stay). Measured 2026-11-19: 46k series → 11k.
+          - source_labels: [__name__]
+            action: keep
+            regex: 'istio_.+|envoy_http_rbac|envoy_tcp'
+          - source_labels: [__name__]
+            action: drop
+            regex: 'istio_(request|response)_bytes_bucket'
+          # Prometheus is meshed, so its scrapes of application ports (moks :9464, seo-agent :8080, ...) are
+          # themselves reported as Istio request telemetry by the targets' sidecars: series that grow with each target
+          # and OOM-killed Prometheus on 2026-11-18. Drop them. (Most of those ~100k series were Prometheus's own
+          # sidecar stats repeated once per target; excludeOutboundPorts in prometheus-deployment.yaml fixed that.)
           - source_labels: [source_workload]
             action: drop
             regex: prometheus

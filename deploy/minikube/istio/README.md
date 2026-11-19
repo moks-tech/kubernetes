@@ -42,16 +42,53 @@ passwords are not.
 | Two gateway replicas with a PDB, two istiod replicas (chart PDB), Kiali meshed by pod label | `ingressgateway.yaml`, `istiod.yaml`, `kiali.yaml` |
 
 Every client of a meshed pod is meshed: kubelet probes go to the sidecar's :15020, Prometheus scrapes through its own
-sidecar (no `includeOutboundIPRanges: ""`: that made scrapes plain text), Kiali has a sidecar. Before adding a client
+sidecar (no `includeOutboundIPRanges: ""`: that made scrapes plain text) except the sidecars' own ports 15020 and 15090,
+which no sidecar captures ([Monitoring](#monitoring)), Kiali has a sidecar. Before adding a client
 outside the mesh, check plain text is gone:
 `sum by (destination_workload_namespace,destination_workload) (increase(istio_requests_total{reporter="destination",connection_security_policy="none"}[1h]))`
-must be empty. The unmeshed namespaces moks-terminals, moks-diagnostics and moks-lab cannot call meshed Services.
+must be empty apart from harbor-core → harbor-registry (the PERMISSIVE :5000 above); Grafana's Platform · Istio mesh
+plots it as **Plain-text requests by workload**. The unmeshed namespaces moks-terminals, moks-diagnostics and moks-lab
+cannot call meshed Services.
 
 **AuthorizationPolicies start as dry runs** (`istio.io/dry-run: "true"`): nothing is refused, Envoy counts what would
-be. `python3 scripts/istio/authz-dry-run-report.py` prints the non-zero counts (exit 1). After a day at 0, enforce:
+be. `python3 scripts/istio/authz-dry-run-report.py` prints the non-zero counts (exit 1); Platform · Istio mesh shows
+them over time per pod (**AuthorizationPolicy: would deny / denied**). After a day at 0, enforce:
 `authorization.dryRun: false` here, `mesh.authorization.dryRun: false` in moks, and delete the annotation in
 jithendar.com `minikube/75-mesh.yaml` and roboshop-ai `argocd-minikube/apps/mesh/authorizationpolicy.yaml`. A new
-caller across namespaces needs its namespace added to the callee's list first.
+caller across namespaces needs its namespace added to the callee's list first. Not harbor yet: harbor-core's plain-text
+calls to the registry's :5000 carry no identity, so `allow-known-callers` counts them as denied (seen 2026-11-19), and
+enforcing it would break image pulls.
+
+## Monitoring
+
+Grafana → **Platform**: **Istio mesh** (requests, success rate and latency per workload, who calls whom, the public
+gateway, TCP per service, mTLS and AuthorizationPolicy counts, proxy CPU and memory; filter by namespace and workload)
+and **Istio control plane** (istiod: connected proxies per replica, xDS pushes and their time, rejected config and
+conflicts, root certificate expiry, sidecar injection, resources). Kiali draws the same telemetry as a graph. Both read
+Prometheus (`../observability/prometheus`, `templates/config.yaml`):
+
+| Job | Scrapes | Notes |
+|---|---|---|
+| `istiod` | each replica's :15014, found by pod in istio-system | through Prometheus's sidecar, plain text (istiod has none) |
+| `envoy-stats` | every sidecar's and gateway's :15090 | bypasses Prometheus's sidecar (`excludeOutboundPorts`), so each namespace's NetworkPolicy must admit `monitoring` on 15090: the applications' `istio-sidecars`, Kiali's `kiali-sidecar-metrics` (`minikube-infrastructure/kiali.tf`). Finished Job pods are skipped. |
+
+`envoy-stats` keeps `istio_*` and the AuthorizationPolicy counters (`envoy_http_rbac`, `envoy_tcp`). Envoy's own
+internal stats (~430 series per proxy) and the request/response size histograms are dropped: 46k series → 11k
+(2026-11-19). Response and request bytes remain as `_sum` and `_count`.
+
+Alerts, group `istio` in `../observability/prometheus/files/alerts.yml` (shown under Prometheus → Alerts):
+
+- **IstiodDown** — no replica answers. The injection webhook fails closed, so no pod in an injected namespace can be
+  created; running pods keep working, and their 24 h certificates are not renewed. `kubectl -n istio-system get pods -l
+  app=istiod`, then `describe` and `logs` of the failing pod; `terraform apply` restores the release.
+- **IstiodReplicaDown** — one replica down for 10 min: the other serves every proxy, and the PDB no longer protects it
+  in a node drain. Same commands; check the node it was scheduled on.
+- **IstioProxyNotScraped** — Prometheus → Status → Target health shows the error for that pod. `connection refused`:
+  that namespace's NetworkPolicy does not admit `monitoring` on 15090 (add it, as `istio-sidecars` does). A timeout: the
+  pod or its node is unhealthy.
+- **IstioConfigRejected** — a proxy refused (NACK) what istiod pushed and keeps its last accepted configuration.
+  `istioctl proxy-status` names it; `istioctl analyze -A` usually explains why. The last change to a VirtualService,
+  DestinationRule or EnvoyFilter is the usual cause: revert it.
 
 ## Traefik (gone, 2026-11-09)
 
