@@ -1,0 +1,125 @@
+name: Disk cleanup
+
+# Runs disk-cleanup.sh --apply against mk4 every day at 06:00 IST (00:30 UTC), and by hand from the Actions tab (dry run,
+# --only and --keep as inputs). GitHub may start a scheduled run late; Harbor's GC still waits out the 02:15-03:45 UTC
+# backup window on its own (disk-cleanup.sh). In a public repository GitHub turns schedules off after 60 days without
+# a commit; re-enable the workflow in the Actions tab if that happens.
+#
+# Access, all in the GitHub environment "mk4" (master only), so pull requests never see it:
+#   mk4      MK4_API_SERVER, MK4_CA_DATA (variables) and MK4_TERRAFORM_TOKEN (environment secret), the Terraform
+#            workflow's ServiceAccount (scripts/setup-minikube-terraform-ci.sh); kubeconfig .github/mk4-terraform-kubeconfig.yaml.
+#   nodes    MK4_NODE_SSH_KEY (environment secret): the private key the nodes accept for root (~/.ssh/hetzner_k3s):
+#              gh secret set MK4_NODE_SSH_KEY --env mk4 --repo moks-tech/kubernetes < ~/.ssh/hetzner_k3s
+#            MK4_SSH_KNOWN_HOSTS (variable, optional): the nodes' known_hosts lines; without it each run trusts the host
+#            keys it first sees.
+#   Harbor   admin's password from Secret harbor/harbor-credentials, or HARBOR_ADMIN_PASSWORD (environment secret,
+#            optional) once it was changed in the portal.
+# This repository is public, so its logs are too: the nodes' addresses are masked before the script runs.
+on:
+  schedule:
+    - cron: '30 0 * * *'   # 06:00 IST
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Only list what would go (no --apply)
+        type: boolean
+        default: false
+      only:
+        description: Steps (--only), comma-separated from pods, nodes, harbor
+        type: string
+        default: pods,nodes,harbor
+      keep:
+        description: Tagged Harbor artifacts kept per repository (--keep)
+        type: number
+        default: 2
+
+permissions:
+  contents: read
+
+# Never two at once, and never cancel one: a cancelled run could stop between Harbor's deletes and its GC.
+concurrency:
+  group: disk-cleanup-mk4
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    environment: mk4
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    env:
+      DRY_RUN: ${{ inputs.dry_run }}
+      ONLY: ${{ inputs.only || 'pods,nodes,harbor' }}
+      KEEP: ${{ inputs.keep || 2 }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Access to mk4 and its nodes
+        env:
+          MK4_API_SERVER: ${{ vars.MK4_API_SERVER }}
+          MK4_CA_DATA: ${{ vars.MK4_CA_DATA }}
+          MK4_TERRAFORM_TOKEN: ${{ secrets.MK4_TERRAFORM_TOKEN }}
+          MK4_NODE_SSH_KEY: ${{ secrets.MK4_NODE_SSH_KEY }}
+          MK4_SSH_KNOWN_HOSTS: ${{ vars.MK4_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          export KUBECONFIG="$RUNNER_TEMP/kubeconfig" SSH_KEY="$RUNNER_TEMP/mk4-ssh-key"
+          printf 'KUBECONFIG=%s\nSSH_KEY=%s\n' "$KUBECONFIG" "$SSH_KEY" >> "$GITHUB_ENV"
+          need=(MK4_API_SERVER MK4_CA_DATA MK4_TERRAFORM_TOKEN)
+          if [[ ",$ONLY," == *,nodes,* ]]; then need+=(MK4_NODE_SSH_KEY); fi
+          missing=()
+          for v in "${need[@]}"; do [[ -n "${!v}" ]] || missing+=("$v"); done
+          [[ ${#missing[@]} -eq 0 ]] || { echo "::error::Not set in environment mk4: ${missing[*]} (see the top of .github/workflows/disk-cleanup.yml)"; exit 1; }
+
+          host="${MK4_API_SERVER#*://}"
+          echo "::add-mask::${host%%[:/]*}"
+          (umask 077; perl -pe 's/\$\{(MK4_[A-Z_]+)\}/$ENV{$1}/g' .github/mk4-terraform-kubeconfig.yaml > "$KUBECONFIG")
+          kubectl --request-timeout=20s get --raw /readyz >/dev/null \
+            || { echo "::error::mk4 API unreachable or rejected the token; re-run scripts/setup-minikube-terraform-ci.sh"; exit 1; }
+          # disk-cleanup.sh prints each node's address; mask them all before it runs.
+          kubectl --request-timeout=20s get nodes -o json \
+            | jq -r '.items[].status.addresses[] | select(.type | endswith("IP")) | .address' \
+            | while IFS= read -r ip; do echo "::add-mask::$ip"; done
+
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          if [[ -n "$MK4_NODE_SSH_KEY" ]]; then (umask 077; printf '%s\n' "$MK4_NODE_SSH_KEY" > "$SSH_KEY"); fi
+          if [[ -n "$MK4_SSH_KNOWN_HOSTS" ]]; then
+            printf '%s\n' "$MK4_SSH_KNOWN_HOSTS" >> ~/.ssh/known_hosts
+          elif [[ ",$ONLY," == *,nodes,* ]]; then
+            echo "::notice::MK4_SSH_KNOWN_HOSTS is not set: the nodes' host keys are trusted as first seen"
+          fi
+
+      - name: disk-cleanup.sh
+        env:
+          HARBOR_PASSWORD: ${{ secrets.HARBOR_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          args=(--yes --only "$ONLY" --keep "$KEEP")
+          if [[ "$DRY_RUN" != true ]]; then args+=(--apply); fi
+          echo "disk-cleanup.sh ${args[*]}"
+          ./disk-cleanup.sh "${args[@]}" < /dev/null 2>&1 | tee "$RUNNER_TEMP/disk-cleanup.log"
+
+      - name: Summary
+        if: always()
+        run: |
+          [[ -s "$RUNNER_TEMP/disk-cleanup.log" ]] || exit 0
+          mode=apply
+          if [[ "$DRY_RUN" == true ]]; then mode='dry run'; fi
+          {
+            echo "### Disk cleanup on mk4 ($mode: $ONLY, keep $KEEP)"
+            echo '```'
+            awk '/^== Summary/ {p = 1} /^== Done/ {p = 0} p' "$RUNNER_TEMP/disk-cleanup.log"
+            grep -E 'problem\(s\)|^Stopped at line' "$RUNNER_TEMP/disk-cleanup.log" || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # The kubeconfig holds a cluster-admin token and the key opens every node: do not leave them on the runner.
+      - name: Remove credentials
+        if: always()
+        run: rm -f "$RUNNER_TEMP/kubeconfig" "$RUNNER_TEMP/mk4-ssh-key" "$RUNNER_TEMP/disk-cleanup.log"

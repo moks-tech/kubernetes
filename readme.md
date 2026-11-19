@@ -28,7 +28,7 @@ Every entry point can run from any directory, and most accept `--help`.
 | `./create-secrets.sh [--apply] [--all]` | Create missing installation credentials. Never rotates existing ones. |
 | `./deploy-argocd.sh [app\|all\|roboshop\|list\|status]` | Register and sync Argo CD Applications. |
 | `./harbor-pull-secret.sh [context]` | Create or rotate Secret `harbor-pull` (registry.jithendar.com) in every active namespace. |
-| `./disk-cleanup.sh [--apply] [--keep N] [--only pods,nodes,harbor]` | Free disk on mk4: finished pods; unused images, journald and apt's cache on every node over SSH; every untagged Harbor artifact and all but the newest 2 tagged of each repository (never `latest` or a pinned digest), then Harbor GC. Shows each node's disk and the Harbor volume before and after, with a summary table. A dry run unless `--apply`. |
+| `./disk-cleanup.sh [--apply] [--keep N] [--only pods,nodes,harbor]` | Free disk on mk4: finished pods; unused images, journald and apt's cache on every node over SSH; every untagged Harbor artifact and all but the newest 2 tagged of each repository (never `latest` or a pinned digest), then Harbor GC. Shows each node's disk and the Harbor volume before and after, with a summary table. A dry run unless `--apply`. Runs with `--apply` every day at 06:00 IST from `.github/workflows/disk-cleanup.yml`, which can also be started by hand. |
 | `scripts/setup-minikube-terraform-ci.sh` | One-time access for the Terraform workflow ([minikube-infrastructure/README.md](minikube-infrastructure/README.md#ci)). |
 | `scripts/data/seed-minikube-demo.py` | Opt-in synthetic demo data. |
 | `scripts/reset-mongo-password.sh` | Reset the RoboShop MongoDB password on mk4. |
@@ -54,7 +54,7 @@ Less common operations in `deploy/minikube/`:
 | `scripts/argocd/` | `bootstrap.py`, `deploy.py`, and `validate.py` (renders the whole catalog and checks ownership). |
 | `scripts/setup/` | `create_secrets.py` and [SECRETS.md](scripts/setup/SECRETS.md). |
 | `scripts/lib/` | Shared helpers: supported-host check, Argo CD ownership check, repository paths. |
-| `.github/workflows/` | `check-mk-infrastructure.yml` (PRs), `create-mk-infrastructure.yml` (Terraform apply on master), `build-harbor-images.yml` (manual). |
+| `.github/workflows/` | `check-mk-infrastructure.yml` (PRs), `create-mk-infrastructure.yml` (Terraform apply on master), `build-harbor-images.yml` (manual), `disk-cleanup.yml` (daily at 06:00 IST and manual). |
 | `tests/`, `deploy/minikube/test-*.py` | Tests for everything above. |
 | `docs/centos7-manual-setup.md`, `dashboard-admin.yaml` | This repository's original CentOS 7 notes and dashboard ServiceAccount, kept for reference. |
 
