@@ -21,6 +21,8 @@
 # ExternalIP. Harbor: HARBOR_URL (https://registry.jithendar.com), HARBOR_USER and HARBOR_PASSWORD (default: admin from
 # Secret harbor/harbor-credentials; if Harbor refuses it, asked for on the terminal). The login reaches curl on stdin.
 # Needs kubectl, jq, curl and ssh.
+#
+# .github/workflows/disk-cleanup.yml runs --apply --yes every day at 06:00 IST (00:30 UTC), and by hand from the Actions tab.
 set -Eeuo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
