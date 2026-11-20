@@ -192,7 +192,7 @@ the admin password from `harbor-credentials`). No secret is printed or put on a 
 ```bash
 python3 deploy/minikube/harbor/registry.py project        # private project "jithendar"
 python3 deploy/minikube/harbor/registry.py ci-robots      # needs gh, signed in
-python3 deploy/minikube/harbor/registry.py pull-secrets   # Secret harbor-pull in jithendar, moks-sre, moks-sre-terminals, moks-sre-diagnostics, roboshop-ai
+python3 deploy/minikube/harbor/registry.py pull-secrets   # Secret harbor-pull in jithendar, moks-sre, roboshop-ai
 python3 deploy/minikube/harbor/registry.py copy-from-ecr  # optional, once: see Moving off ECR
 ```
 

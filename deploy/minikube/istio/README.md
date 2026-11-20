@@ -47,7 +47,7 @@ which no sidecar captures ([Monitoring](#monitoring)), Kiali has a sidecar. Befo
 outside the mesh, check plain text is gone:
 `sum by (destination_workload_namespace,destination_workload) (increase(istio_requests_total{reporter="destination",connection_security_policy="none"}[1h]))`
 must be empty apart from harbor-core → harbor-registry (the PERMISSIVE :5000 above); Grafana's Platform · Istio mesh
-plots it as **Plain-text requests by workload**. The unmeshed namespaces moks-sre-terminals, moks-sre-diagnostics and moks-sre-lab
+plots it as **Plain-text requests by workload**. MOKS's session pods in moks-sre, unmeshed by label,
 cannot call meshed Services.
 
 **AuthorizationPolicies start as dry runs** (`istio.io/dry-run: "true"`): nothing is refused, Envoy counts what would
