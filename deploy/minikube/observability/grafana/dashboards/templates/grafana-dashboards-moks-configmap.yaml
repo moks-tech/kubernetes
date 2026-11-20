@@ -1,4 +1,5 @@
-# Grafana folder MOKS (copy of the moks repo's deploy/grafana/moks-dashboard.json; edit it there and copy it here). JSON at the chart root, loaded verbatim (never templated).
+# Grafana folder MOKS: copies of moks-sre's deploy/grafana/dashboards/moks-*.json, which its deploy/grafana/build.py writes (edit
+# them there and copy them here). JSON at the chart root, loaded verbatim (never templated).
 apiVersion: v1
 kind: ConfigMap
 metadata:

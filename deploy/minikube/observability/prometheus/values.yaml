@@ -45,16 +45,38 @@ extraScrapeConfigs:
     relabel_configs:
       - target_label: service
         replacement: seo-agent
-  # MOKS (namespace moks-sre): api, worker, executor and terminal pods through the headless Service moks-metrics.
-  # The moks NetworkPolicy admits the monitoring namespace on 9464 only. Same block as moks
-  # deploy/grafana/prometheus-scrape.yaml; alerts in files/alerts.yml (groups moks-*).
+  # MOKS (namespace moks-sre, mrjithendar/moks-sre): every MOKS process (app=moks: api, worker, crewai, executor,
+  # terminal) and the reranker and embedder, found by pod (pod list/watch, istioMetrics) so each series says which one:
+  # instance and pod are the pod name, component is the process (the MOKS dashboards' Component variable). Prometheus
+  # scrapes through its sidecar; the headless Services moks-metrics, moks-reranker-metrics and moks-embedder-metrics let
+  # it send mTLS to their :9464, and the moks NetworkPolicies admit the monitoring namespace on 9464 only. Same block as
+  # moks-sre deploy/grafana/prometheus-scrape.yaml; alerts in files/alerts.yml (groups moks*).
   - job_name: moks
     metrics_path: /metrics
-    dns_sd_configs:
-      - names: ["moks-metrics.moks-sre.svc.cluster.local"]
-        type: A
-        port: 9464
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names: [moks-sre]
     relabel_configs:
+      # The metrics port of MOKS's own pods only: not the diagnostic and terminal session pods, not the sidecars' ports.
+      - source_labels: [__meta_kubernetes_pod_label_app, __meta_kubernetes_pod_container_port_number]
+        regex: moks(-reranker|-embedder)?;9464
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_phase]
+        regex: Pending|Succeeded|Failed
+        action: drop
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: instance
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        regex: moks-(.+)
+        target_label: component
+      - source_labels: [__meta_kubernetes_pod_label_component]
+        regex: (.+)
+        target_label: component
       - target_label: service
         replacement: moks
   # CloudNativePG cluster (namespace postgres-db): every instance's exporter (container port "metrics", :9187), found

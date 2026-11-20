@@ -122,25 +122,27 @@ groups:
           severity: warning
         annotations:
           summary: 'A due {{ $labels.job_class }} job has waited over 15 minutes; check the moks-worker pod'
-  # Copied from moks deploy/grafana/moks-alerts.yaml.
+  # Copied from moks-sre deploy/grafana/moks-alerts.yaml. Every MOKS process exports these gauges and only a worker sets
+  # them, so each rule takes max() over the job: one alert, not one per pod (both backup alerts fired six times on mk4).
   - name: moks-durability
     rules:
       - alert: MoksBackupOverdue
-        expr: time() - moks_backup_last_success_timestamp_seconds > 10800
+        expr: time() - max(moks_backup_last_success_timestamp_seconds{job="moks"}) > 10800
         for: 5m
         labels:
           severity: critical
         annotations:
           summary: No successful MOKS backup for over 3 hours
+          description: Also fires when no backup has ever succeeded (mk4 has no moks-backup CronJob yet).
       - alert: MoksBackupFailed
-        expr: moks_backup_last_run_success == 0
+        expr: max(moks_backup_last_run_success{job="moks"}) == 0
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: The latest MOKS backup run failed
       - alert: MoksDatabaseVolumeFilling
-        expr: moks_database_size_bytes / moks_database_volume_bytes > 0.7
+        expr: max(moks_database_size_bytes{job="moks"}) / max(moks_database_volume_bytes{job="moks"}) > 0.7
         for: 30m
         labels:
           severity: warning
@@ -157,6 +159,33 @@ groups:
           severity: warning
         annotations:
           summary: 'Knowledge searches are answered with less than was asked for: {{ $labels.reason }}'
+  # About MOKS's own ML (shadow mode), never about the workloads it watches. Copied from moks-sre deploy/grafana/moks-alerts.yaml.
+  - name: moks-ml
+    rules:
+      - alert: MoksMLModelInvalid
+        expr: increase(moks_ml_fallbacks_total{job="moks", capability="anomaly_detection", reason="model_invalid"}[1h]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: An anomaly model failed its artifact checks and is not scoring
+          description: Checksum, format, schema or structure. Roll the cohort back or retrain it (moks-sre docs/ML.md, Roll back).
+      - alert: MoksMLChampionNeedsReview
+        expr: max by (algorithm, reason) (moks_ml_model_degraded{job="moks"}) == 1
+        for: 2h
+        labels:
+          severity: info
+        annotations:
+          summary: An anomaly champion's health check recommends a review
+          description: Flag rate above its gate, input drift, judged precision below 0.7, or a stale schema. MOKS Settings > Machine learning > Models shows which and why.
+      - alert: MoksMLContextUnreadable
+        expr: sum by (source) (increase(moks_ml_context_gaps_total{job="moks"}[1h])) > 10
+        for: 1h
+        labels:
+          severity: info
+        annotations:
+          summary: Correlation keeps failing to read context from one source
+          description: Groups still form, with fewer links. Check the connector and the automation principal's bindings.
   - name: redis
     rules:
       # Shared Valkey (deploy/minikube/redis): one primary for every application.
