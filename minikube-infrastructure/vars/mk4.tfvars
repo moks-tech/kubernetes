@@ -9,6 +9,21 @@ postgres_allowed_ips = ["122.177.247.138/32"]
 # Who may reach /redis and redis.jithendar.com (redis.tf): the same address.
 redis_allowed_ips = ["122.177.247.138/32"]
 
+# Cloudflare in front of jithendar.com and www (docs/cloudflare-access-and-db-backups.md, section 2, step 7). Both DNS
+# records are proxied (orange cloud); registry., postgres. and redis. are DNS-only (checked 2026-11-20). The gateway takes
+# the visitor's address from CF-Connecting-IP, and only from Cloudflare's ranges: the applications' rate limits, logs and
+# Turnstile see the visitor again instead of a Cloudflare edge.
+cloudflare_proxied = true
+
+# Step 8, once the Zero Trust application for the admin tools exists (steps 2-5): the gateway then requires its Access
+# token on /argocd, /kiali, /grafana, /prometheus, /loki, /postgres, /redis, /ui and /v1, and the /postgres and /redis
+# IP allowlists switch off. Until then /postgres and /redis answer 403 through Cloudflare (their allowlists only ever see
+# Cloudflare's addresses); postgres.jithendar.com and redis.jithendar.com keep their own allowlists either way.
+# cloudflare_access = {
+#   team_domain = "<team>.cloudflareaccess.com"
+#   audiences   = ["<Application Audience (AUD) tag>"]
+# }
+
 # Applications on the shared cluster (postgres.tf). Each gets database + owner role <key> and Secret
 # <namespace>/postgres-db-credentials. Listed ahead of moving them off their own PostgreSQL pods (README.md, PostgreSQL,
 # "Moving an application"); until an application switches, its database here stays empty.
