@@ -31,7 +31,7 @@ CI_DAYS = 365
 CI_REPOSITORIES = {'moks': 'mrjithendar/moks-sre', 'roboshop-ai': 'mrjithendar/roboshop-ai',
                    'jithendar-com': 'moks-tech/jithendar.com'}
 # Namespaces on mk4 whose pods run images from the project.
-NAMESPACES = ('jithendar', 'moks', 'moks-terminals', 'moks-diagnostics', 'roboshop-ai')
+NAMESPACES = ('jithendar', 'moks-sre', 'roboshop-ai')
 ECR = '881026659929.dkr.ecr.us-east-1.amazonaws.com'
 # ECR repository -> Harbor repository (same name, in the project).
 IMAGES = ('jithendar-com', 'practice-executor', 'practice-sandbox',

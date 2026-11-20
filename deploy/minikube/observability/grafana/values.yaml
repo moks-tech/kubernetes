@@ -116,7 +116,7 @@ datasources:
             spanStartTimeShift: "-5m"
             spanEndTimeShift: "5m"
             customQuery: true
-            query: '{namespace=~"jithendar|moks"} |= "trace_id=$${__trace.traceId}"'
+            query: '{namespace=~"jithendar|moks-sre"} |= "trace_id=$${__trace.traceId}"'
 
 # The ConfigMaps come from the grafana-dashboards release (minikube-infrastructure/grafana.tf): RoboShop, MOKS and
 # Platform (the shared PostgreSQL and Redis clusters, bge-m3 embeddings, the Istio mesh and istiod) from ./dashboards,

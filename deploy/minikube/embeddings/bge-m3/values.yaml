@@ -42,7 +42,7 @@ callers:
     serviceAccount: default
     podLabels:
       app: seo-agent
-  - namespace: moks               # moks-api, moks-worker, moks-crewai (moks-sre deploy/helm/moks)
+  - namespace: moks-sre           # moks-api, moks-worker, moks-crewai (moks-sre deploy/helm/moks)
     serviceAccount: moks
     podLabels:
       app: moks

@@ -9,8 +9,8 @@
 #   - Prometheus: meshed, scrapes go out through its sidecar as mTLS (observability/prometheus);
 #   - Kiali: meshed by pod label (kiali.yaml), since istio-system itself is not injected;
 #   - the API server calling cert-manager's webhook: that pod has no sidecar (cert-manager values);
-#   - moks-terminals, moks-diagnostics, moks-lab: unmeshed on purpose; they reach the API server and the internet,
-#     and a diagnostic that calls a meshed Service in plain text is refused (moks itself was already STRICT);
+#   - MOKS's diagnostic and terminal session pods, in moks-sre: unmeshed on purpose (label sidecar.istio.io/inject=false);
+#     they reach the API server and the internet, and one that calls a meshed Service in plain text is refused;
 #   - harbor-core proxying /v2/ to the registry: it keeps Host registry.jithendar.com, so its sidecar falls back to
 #     PassthroughCluster in plain text; the registry's port 5000 is PERMISSIVE for it
 #     (harbor/manifests/harbor-registry-peerauthentication.yaml). Without that every image pull is a 503.
@@ -29,11 +29,11 @@ authorization:
     argocd: [istio-ingress, monitoring]
     cert-manager: [monitoring]
     harbor: [istio-ingress, monitoring]
-    # istio-system: Kiali. moks: its connectors query Prometheus and Loki.
-    monitoring: [istio-ingress, istio-system, moks]
+    # istio-system: Kiali. moks-sre: its connectors query Prometheus and Loki.
+    monitoring: [istio-ingress, istio-system, moks-sre]
     # OTLP traces from the applications (roboshop-ai through its ExternalName Service otel-collector); Grafana and
     # Prometheus from monitoring.
-    observability: [monitoring, jithendar, moks, roboshop-ai]
+    observability: [monitoring, jithendar, moks-sre, roboshop-ai]
 
 # The gateway's access log: one JSON line per request on its stdout, collected by Alloy into Loki like any pod's log.
 # The fields are the ones Alloy keeps (observability/loki/config.alloy): no client address, path, query or header ever

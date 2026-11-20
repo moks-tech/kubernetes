@@ -53,7 +53,7 @@ root:
     - {name: grafana, prefix: /grafana, to: monitoring/grafana}
     - {name: prometheus, prefix: /prometheus, to: monitoring/prometheus}
     - {name: loki, prefix: /loki, to: monitoring/loki}
-    - {name: moks, prefix: /moks, to: moks/moks}
+    - {name: moks, prefix: /moks, to: moks-sre/moks}
     - {name: roboshop, prefix: /roboshop, to: roboshop-ai/roboshop}
     - {name: postgres, prefix: /postgres, to: postgres-db/postgres-ui}
     - {name: redis, prefix: /redis, to: redis/redis-ui}
