@@ -167,3 +167,15 @@ def test_edge_and_control_plane_survive_one_node():
     assert istiod['pilot']['replicaCount'] >= 2
     kiali = yaml.safe_load((ROOT / 'deploy/minikube/istio/kiali.yaml').read_text())
     assert kiali['deployment']['pod_labels'] == {'sidecar.istio.io/inject': 'true'}   # Prometheus is STRICT
+
+
+def test_the_forged_header_rule_judges_the_proxy_protocol_address_not_the_load_balancer():
+    """ipBlocks is the physical peer (the load balancer), so a rule on it refused every request Cloudflare sent.
+    remoteIpBlocks is the PROXY protocol's address: Cloudflare's edge through Cloudflare, the visitor directly."""
+    docs = render('--set', 'cloudflare.proxied=true')
+    rule = of(docs, 'AuthorizationPolicy', 'cloudflare-forged-header')['spec']['rules'][0]
+    source = rule['from'][0]['source']
+    assert 'notIpBlocks' not in source and 'ipBlocks' not in source
+    assert source['notRemoteIpBlocks'] == VALUES['cloudflare']['ipRanges']
+    assert {'key': 'request.headers[cf-connecting-ip]', 'values': ['*']} in rule['when']
+    assert not [d for d in render() if d['metadata']['name'] == 'cloudflare-forged-header']   # only while proxied
