@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Reaching /postgres and /redis from your laptop only</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
+  :root { --ink: #1b1f24; --muted: #57606a; --line: #d0d7de; --soft: #f6f8fa; --accent: #0b5fcc; --warn: #9a6700; --warn-bg: #fff8c5; --ok: #1a7f37; --bad: #cf222e; }
+  * { box-sizing: border-box; }
+  body { font: 10.2pt/1.5 -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif; color: var(--ink); margin: 0; }
+  h1 { font-size: 19pt; line-height: 1.2; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 14px; }
+  h2 { font-size: 13pt; margin: 22px 0 6px; padding-bottom: 4px; border-bottom: 2px solid var(--accent); break-after: avoid; }
+  h3 { font-size: 11pt; margin: 14px 0 4px; break-after: avoid; }
+  p { margin: 6px 0; }
+  ol, ul { margin: 6px 0; padding-left: 20px; }
+  li { margin: 3px 0; }
+  code, pre { font: 8.8pt/1.45 "SF Mono", Menlo, Consolas, monospace; }
+  code { background: var(--soft); border: 1px solid var(--line); border-radius: 3px; padding: 0 3px; }
+  pre { background: var(--soft); border: 1px solid var(--line); border-radius: 5px; padding: 7px 9px; margin: 6px 0 8px; white-space: pre-wrap; word-break: break-all; break-inside: avoid; }
+  pre code { background: none; border: 0; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 10px; font-size: 9.3pt; break-inside: avoid; }
+  th, td { border: 1px solid var(--line); padding: 4px 7px; text-align: left; vertical-align: top; }
+  th { background: var(--soft); font-weight: 600; }
+  .box { border: 1px solid var(--line); border-left: 4px solid var(--accent); background: #f3f8ff; border-radius: 4px; padding: 8px 11px; margin: 8px 0; break-inside: avoid; }
+  .warn { border-left-color: var(--warn); background: var(--warn-bg); }
+  .tag { display: inline-block; font-size: 8pt; font-weight: 600; padding: 0 6px; border-radius: 9px; border: 1px solid; }
+  .tag.ok { color: var(--ok); border-color: #4ac26b; }
+  .tag.bad { color: var(--bad); border-color: #ff8182; }
+  .tag.wait { color: var(--warn); border-color: #d4a72c; }
+  .muted { color: var(--muted); }
+  .small { font-size: 8.8pt; }
+  .step { font-weight: 600; }
+  a { color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<h1>Reaching /postgres and /redis from your laptop only</h1>
+<p class="sub">mk4 (jithendar.com) · what to do next · written 20 November 2026 · runbook: <code>docs/cloudflare-access-and-db-backups.md</code></p>
+
+<div class="box">
+  <strong>In short.</strong> <code>https://jithendar.com/postgres/</code> (pgAdmin) and <code>/redis/</code> (Redis Insight)
+  answer <em>RBAC: access denied</em> because jithendar.com now goes through Cloudflare, and their IP allowlist only ever sees
+  Cloudflare's addresses. <strong>Today</strong>, open them through <code>kubectl port-forward</code> (section 2): only a
+  machine with your kubeconfig can do that. <strong>For good</strong>, put Cloudflare Access in front, signed in as you
+  <em>and</em> limited to your Mac by its serial number (section 3), then merge the step-8 change (section 4).
+</div>
+
+<h2>1. Where things stand</h2>
+<table>
+  <tr><th style="width:34%">What</th><th style="width:16%">State</th><th>Detail</th></tr>
+  <tr><td>jithendar.com and www through Cloudflare</td><td><span class="tag ok">done</span></td><td>DNS proxied (orange cloud). registry., postgres. and redis. stay DNS-only.</td></tr>
+  <tr><td>Gateway reads the visitor address from Cloudflare (runbook step 7)</td><td><span class="tag ok">done</span></td><td><code>cloudflare_proxied = true</code> (kubernetes #19), with the rule fix in #20. The site logs real visitor addresses; a forged <code>CF-Connecting-IP</code> sent around Cloudflare gets 403.</td></tr>
+  <tr><td>https://jithendar.com/postgres/ and /redis/</td><td><span class="tag bad">403</span></td><td>Their IP allowlist (<code>122.177.247.138/32</code>) is checked against Cloudflare's address. Fixed by step 8.</td></tr>
+  <tr><td>psql at postgres.jithendar.com:443, redis-cli at redis.jithendar.com:443</td><td><span class="tag ok">works</span></td><td>Not proxied, so their IP allowlist sees your real address: your home network only.</td></tr>
+  <tr><td>Cloudflare Access on the admin tools (runbook step 8)</td><td><span class="tag wait">to do</span></td><td>Needs the Zero Trust set-up below, then a 4-line change to <code>vars/mk4.tfvars</code>.</td></tr>
+</table>
+
+<h2>2. Today: open them from your laptop, nothing to change</h2>
+<p><code>kubectl port-forward</code> goes through the Kubernetes API with your kubeconfig, which only your laptop holds. The
+gateway, Cloudflare and both allowlists are not involved, and nothing is exposed to anyone else.</p>
+<h3>pgAdmin</h3>
+<pre><code>kubectl -n postgres-db port-forward svc/postgres-ui 8080:80
+# then open http://localhost:8080/postgres/  (pgAdmin's own login, then a database login)</code></pre>
+<h3>Redis Insight</h3>
+<pre><code>kubectl -n redis port-forward svc/redis-ui 8081:80
+# then open http://localhost:8081/redis/  (signs in to Valkey as the read-mostly "console" user)</code></pre>
+<h3>Command-line clients (home network only, unchanged)</h3>
+<pre><code>psql "host=postgres.jithendar.com port=443 dbname=&lt;name&gt; user=&lt;name&gt; sslmode=verify-full sslrootcert=system sslnegotiation=direct"
+redis-cli --tls --sni redis.jithendar.com -h redis.jithendar.com -p 443 --user &lt;name&gt; --askpass</code></pre>
+<p class="small muted">Both stop working when your ISP changes your home address: update <code>postgres_allowed_ips</code> and
+<code>redis_allowed_ips</code> in <code>minikube-infrastructure/vars/mk4.tfvars</code>. Your current IPv4 address is the
+<code>ip=</code> line of <code>curl -4 -s https://jithendar.com/cdn-cgi/trace</code>.</p>
+
+<h2>3. For good: Cloudflare Access, you and this Mac only</h2>
+<p>Cloudflare asks for your login before a request reaches mk4. The gateway then refuses those paths unless the request
+carries Cloudflare's signed Access token, so going around Cloudflare to the server's address gets 403. Two Access
+applications are used, so the databases can have a stricter rule than the other admin tools:</p>
+<table>
+  <tr><th style="width:26%">Access application</th><th style="width:34%">Paths on jithendar.com</th><th>Policy</th></tr>
+  <tr><td><strong>jithendar.com databases</strong></td><td><code>/postgres</code>, <code>/redis</code></td><td>Include <em>Emails</em> = your address<br>Require <em>Device Posture – Serial Number List</em> = your Mac</td></tr>
+  <tr><td><strong>jithendar.com admin tools</strong></td><td><code>/argocd</code>, <code>/kiali</code>, <code>/grafana</code>, <code>/prometheus</code>, <code>/loki</code>, <code>/ui</code>, <code>/v1</code> (Vault)</td><td>Include <em>Emails</em> = your address. A second policy, Service Auth, for the <code>moks-ci</code> service token.</td></tr>
+  <tr><td>two <strong>Bypass</strong> applications</td><td><code>/prometheus/api/v1/write</code>, <code>/loki/api/v1/push</code></td><td>Bypass, Include <em>Everyone</em>. The EKS Prometheus agent and Alloy push here with their own gateway login.</td></tr>
+</table>
+<p class="small">In an Access policy, <em>Include</em> rules work like OR and <em>Require</em> rules like AND: with the rule above you
+must be signed in as you <strong>and</strong> be on your Mac. Without the second application, the serial-number rule would
+also apply to Argo CD, Grafana and the rest.</p>
+
+<h3>Steps in Cloudflare (dash.cloudflare.com and one.dash.cloudflare.com)</h3>
+<ol>
+  <li><span class="step">SSL/TLS → Overview:</span> encryption mode <strong>Full (strict)</strong>. The origin has a valid Let's Encrypt certificate.</li>
+  <li><span class="step">Zero Trust:</span> pick a team name. Your team domain is <code>&lt;team&gt;.cloudflareaccess.com</code>. Under Settings → Authentication add <strong>One-time PIN</strong> (or Google).</li>
+  <li><span class="step">Enrol your Mac:</span> install the Cloudflare One (WARP) client, allow your email under the device enrolment settings, and sign the client in to your team. <em>Posture only</em> mode is enough: it reports device information without routing your traffic.</li>
+  <li><span class="step">Serial number list:</span> on the Mac run <code>system_profiler SPHardwareDataType | grep 'Serial Number'</code>. In Zero Trust → Reusable components → Lists, create a list of type <strong>Serial numbers</strong> with that value.</li>
+  <li><span class="step">Applications:</span> Access → Applications → Add → <strong>Self-hosted</strong>, as in the table above. Copy each of the two main applications' <strong>Application Audience (AUD) tag</strong> (Overview tab).</li>
+  <li><span class="step">Service token</span> (optional for now): Access → Service credentials → create <code>moks-ci</code>, and store its ID and secret as the <code>CF_ACCESS_CLIENT_ID</code> and <code>CF_ACCESS_CLIENT_SECRET</code> Actions secrets of the moks-sre repository. Only its Argo CD deploy job uses them, and that job is off today.</li>
+</ol>
+<div class="box warn small">
+  <strong>Check before relying on it.</strong> Cloudflare's docs list device serial numbers as supported on macOS, Windows and
+  Linux, but do not say which Zero Trust plans include them. If your plan does not, use <em>Require IP ranges</em> instead:
+  your home IPv4 address and your IPv6 /64 prefix (both from <code>https://jithendar.com/cdn-cgi/trace</code>). That means
+  "your home network" rather than "your laptop", and it needs updating when the ISP changes either address. Access
+  client certificates (mTLS) are another way to pin one device, but they need a pay-as-you-go or Enterprise Zero Trust plan.
+</div>
+
+<h2>4. Turn it on in mk4 (runbook step 8)</h2>
+<p>Send the team domain and the two AUD tags (none of them is secret). The change to
+<code>minikube-infrastructure/vars/mk4.tfvars</code> is:</p>
+<pre><code>cloudflare_access = {
+  team_domain = "&lt;team&gt;.cloudflareaccess.com"
+  audiences   = ["&lt;AUD of jithendar.com databases&gt;", "&lt;AUD of jithendar.com admin tools&gt;"]
+}</code></pre>
+<p>Merging it to master applies it (workflow <em>Create minikube infrastructure</em>). Terraform then makes the gateway require
+an Access token on all nine paths and switches off the <code>/postgres</code> and <code>/redis</code> IP allowlists.
+<code>postgres.jithendar.com</code> and <code>redis.jithendar.com</code> keep theirs. Do steps 2–5 of section 3 first: once this is
+applied, any of the nine paths without an Access application in front answers 403.</p>
+
+<h3>Check it</h3>
+<pre><code># Through Cloudflare, not signed in: a redirect to your Access login
+curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' https://jithendar.com/postgres/
+# Around Cloudflare, straight to the server: refused by the gateway
+curl -s -o /dev/null -w '%{http_code}\n' --resolve jithendar.com:443:46.224.66.128 https://jithendar.com/postgres/   # 403
+# The site itself is unaffected
+curl -s -o /dev/null -w '%{http_code}\n' https://jithendar.com/                                                       # 200</code></pre>
+<p>In a browser on your Mac, <code>/postgres/</code> asks for the Access login, then pgAdmin's. On another device, signed in
+as you, Cloudflare refuses it. Grafana's dashboards for the EKS cluster should keep receiving data (the two Bypass paths).</p>
+
+<h2>5. Who can get in, layer by layer</h2>
+<table>
+  <tr><th style="width:24%">Way in</th><th>What stands in front</th></tr>
+  <tr><td>https://jithendar.com/postgres/</td><td>Cloudflare Access (you, on your Mac) → gateway token check → pgAdmin login → database login</td></tr>
+  <tr><td>https://jithendar.com/redis/</td><td>Cloudflare Access (you, on your Mac) → gateway token check → gateway login "redis" → Redis Insight (Valkey ACL user "console")</td></tr>
+  <tr><td>kubectl port-forward</td><td>Your kubeconfig and the cluster's RBAC. Keep it on the laptop only.</td></tr>
+  <tr><td>postgres. / redis.jithendar.com:443</td><td>IP allowlist (home network) → TLS → PostgreSQL or Valkey password</td></tr>
+</table>
+<p class="small muted">One detail: the gateway accepts a token from either Access application on all nine paths. The Mac-only
+rule is applied by Cloudflare. Someone who went around Cloudflare would therefore need a valid admin-tools token, which is
+only issued after signing in as you.</p>
+
+<h2>6. If something goes wrong</h2>
+<table>
+  <tr><th style="width:30%">You see</th><th>Meaning, and what to do</th></tr>
+  <tr><td>Every page: <em>RBAC: access denied</em></td><td>A gateway policy refuses Cloudflare itself. That happened on 20 Nov (fixed in #20). Remove the newest policy in <code>istio-ingress</code>, or revert the last change to <code>mk4.tfvars</code>.</td></tr>
+  <tr><td>/postgres or /redis: <em>RBAC: access denied</em></td><td>Step 8 is not applied yet (allowlist), or the request reached mk4 without an Access token. Use section 2 meanwhile.</td></tr>
+  <tr><td>401 <em>Jwt verification fails</em></td><td>The token's audience is not in <code>audiences</code>, or the team domain is wrong. Compare with the AUD tags in Zero Trust.</td></tr>
+  <tr><td>Cloudflare's "you don't have access" page</td><td>The policy refused you: wrong email, or the Mac's client is not signed in or its serial number is not on the list.</td></tr>
+  <tr><td>EKS dashboards stop receiving data</td><td>The two Bypass applications are missing or have the wrong path.</td></tr>
+</table>
+<p><strong>Roll back step 8:</strong> remove <code>cloudflare_access</code> from <code>mk4.tfvars</code> and merge. The
+allowlists come back, and /postgres and /redis are 403 again behind Cloudflare. Then delete the applications in Zero Trust.</p>
+
+<p class="small muted" style="margin-top:14px">Cloudflare references (read 20 Nov 2026): Access policies, developers.cloudflare.com/cloudflare-one/access-controls/policies/ ·
+Device serial numbers, developers.cloudflare.com/cloudflare-one/identity/devices/warp-client-checks/corp-device/ · Client checks
+and supported systems, developers.cloudflare.com/cloudflare-one/identity/devices/warp-client-checks/ · Access mutual TLS,
+developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/mutual-tls-authentication/</p>
+
+</body>
+</html>
