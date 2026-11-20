@@ -35,7 +35,7 @@ Create the Secrets before applying:
 PASS=$(openssl rand -hex 32)
 kubectl --context mk4 -n monitoring create secret generic loki-read-auth \
   --type=kubernetes.io/basic-auth --from-literal=username=moks --from-literal=password="$PASS"
-kubectl --context roboshop-demo -n moks patch secret moks-secrets --type merge \
+kubectl --context roboshop-demo -n moks-sre patch secret moks-secrets --type merge \
   -p "{\"stringData\":{\"MOKS_CRED_LOKI_PASSWORD\":\"$PASS\"}}"
 unset PASS
 terraform -chdir=minikube-infrastructure apply -var-file=vars/mk4.tfvars

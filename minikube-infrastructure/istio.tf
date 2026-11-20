@@ -15,7 +15,7 @@ resource "helm_release" "istio_base" {
 }
 
 # The CNI agent sets up each meshed pod's traffic redirection on the node, so injected pods carry no istio-init
-# container with NET_ADMIN and NET_RAW. Without it Pod Security "baseline" (namespace moks) rejects every injected pod.
+# container with NET_ADMIN and NET_RAW. Without it Pod Security "baseline" (namespace moks-sre) rejects every injected pod.
 # Chained to k3s's flannel; k3s's CNI paths are in deploy/minikube/istio/cni.yaml.
 resource "helm_release" "istio_cni" {
   name       = "istio-cni"

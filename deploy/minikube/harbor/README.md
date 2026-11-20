@@ -161,10 +161,10 @@ time docker push registry.jithendar.com/jithendar/push-test:1
 in the namespace (Kubernetes pull access):
 
 ```bash
-kubectl --context mk4 -n moks run harbor-pull-test --restart=Never --image=registry.jithendar.com/jithendar/push-test:1 \
+kubectl --context mk4 -n moks-sre run harbor-pull-test --restart=Never --image=registry.jithendar.com/jithendar/push-test:1 \
   --overrides='{"spec":{"imagePullSecrets":[{"name":"harbor-pull"}],"nodeSelector":{"kubernetes.io/hostname":"mk4-m02"}}}' -- true
-kubectl --context mk4 -n moks get pod harbor-pull-test -w      # Completed, not ErrImagePull
-kubectl --context mk4 -n moks delete pod harbor-pull-test
+kubectl --context mk4 -n moks-sre get pod harbor-pull-test -w      # Completed, not ErrImagePull
+kubectl --context mk4 -n moks-sre delete pod harbor-pull-test
 ```
 
 Then delete `jithendar/push-test` in the portal.
@@ -192,7 +192,7 @@ the admin password from `harbor-credentials`). No secret is printed or put on a 
 ```bash
 python3 deploy/minikube/harbor/registry.py project        # private project "jithendar"
 python3 deploy/minikube/harbor/registry.py ci-robots      # needs gh, signed in
-python3 deploy/minikube/harbor/registry.py pull-secrets   # Secret harbor-pull in jithendar, moks, moks-terminals, moks-diagnostics, roboshop-ai
+python3 deploy/minikube/harbor/registry.py pull-secrets   # Secret harbor-pull in jithendar, moks-sre, moks-sre-terminals, moks-sre-diagnostics, roboshop-ai
 python3 deploy/minikube/harbor/registry.py copy-from-ecr  # optional, once: see Moving off ECR
 ```
 

@@ -92,7 +92,7 @@ groups:
           severity: warning
         annotations:
           summary: 'More than 5% of MOKS API requests fail with 5xx'
-          description: 'Loki: {namespace="moks"} | logfmt | event="http_request" | status=~"5.." gives trace ids to open in Jaeger.'
+          description: 'Loki: {namespace="moks-sre"} | logfmt | event="http_request" | status=~"5.." gives trace ids to open in Jaeger.'
       - alert: MoksModelCallsFailing
         expr: sum by (provider) (rate(moks_llm_requests_total{job="moks", outcome!="ok"}[15m])) / sum by (provider) (rate(moks_llm_requests_total{job="moks"}[15m])) > 0.5
         for: 15m

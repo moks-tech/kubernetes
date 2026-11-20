@@ -45,13 +45,13 @@ extraScrapeConfigs:
     relabel_configs:
       - target_label: service
         replacement: seo-agent
-  # MOKS (namespace moks): api, worker, executor and terminal pods through the headless Service moks-metrics.
+  # MOKS (namespace moks-sre): api, worker, executor and terminal pods through the headless Service moks-metrics.
   # The moks NetworkPolicy admits the monitoring namespace on 9464 only. Same block as moks
   # deploy/grafana/prometheus-scrape.yaml; alerts in files/alerts.yml (groups moks-*).
   - job_name: moks
     metrics_path: /metrics
     dns_sd_configs:
-      - names: ["moks-metrics.moks.svc.cluster.local"]
+      - names: ["moks-metrics.moks-sre.svc.cluster.local"]
         type: A
         port: 9464
     relabel_configs:
