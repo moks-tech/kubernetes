@@ -19,7 +19,7 @@ template:
       # The runner's externals (its Node.js for JavaScript actions) copied where the Docker daemon sees them, for
       # container actions and container: jobs.
       - name: init-dind-externals
-        image: ghcr.io/mrjithendar/mk4-runner:2.338.2-48743dc57f6a
+        image: ghcr.io/mrjithendar/mk4-runner:2.338.2-87b7e624725e
         command: ["cp"]
         args: ["-r", "/home/runner/externals/.", "/home/runner/tmpDir/"]
         volumeMounts:
@@ -66,7 +66,7 @@ template:
       - name: runner
         # GitHub's runner image plus the organization's tools (image/Dockerfile), built by build-runner-image.yml. The
         # tag is <runner version>-<12 hex of the Dockerfile's SHA-256>; that workflow fails until this line matches.
-        image: ghcr.io/mrjithendar/mk4-runner:2.338.2-48743dc57f6a
+        image: ghcr.io/mrjithendar/mk4-runner:2.338.2-87b7e624725e
         command: ["/home/runner/run.sh"]
         env:
           - name: DOCKER_HOST

@@ -60,6 +60,11 @@ RUN cd /tmp \
  && install -m 0755 linux-arm64/helm /usr/local/bin/helm \
  && rm -rf /tmp/*
 
+# The home directory as on GitHub's Ubuntu runners: writable by the runner user only. The base image leaves it
+# world-writable (chmod 777), and platformdirs (pip-audit, other uv/pip tools) refuses to create ~/.cache/<app> under a
+# directory other users can write: "PermissionError: /home/runner, writable by another user".
+RUN chmod 755 /home/runner
+
 # pip installs for the runner user land in ~/.local (scripts in ~/.local/bin).
 ENV LANG=C.UTF-8 \
     PATH=/home/runner/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
