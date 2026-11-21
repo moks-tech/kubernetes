@@ -9,14 +9,15 @@
 # maxRunners:
 
 # No containerMode: each job runs inside the runner container itself. dind needs a privileged container, which
-# Gatekeeper refuses (gatekeeper/constraints/values.yaml), so jobs that build images or use container: / services:
-# stay on GitHub-hosted runners.
+# Gatekeeper refuses (gatekeeper/constraints/values.yaml), so there is no Docker daemon: jobs that build images, run
+# docker, or use container: / services: fail here.
 template:
   spec:
     containers:
       - name: runner
-        # Pinned (the chart's default is :latest, which Gatekeeper warns about). Multi-arch; mk4's nodes are arm64.
-        image: ghcr.io/actions/actions-runner:2.338.2
+        # GitHub's runner image plus the organization's tools (image/Dockerfile), built by build-runner-image.yml. The
+        # tag is <runner version>-<12 hex of the Dockerfile's SHA-256>; that workflow fails until this line matches.
+        image: ghcr.io/mrjithendar/mk4-runner:2.338.2-48743dc57f6a
         command: ["/home/runner/run.sh"]
         # CPU and memory per runner pod. Unset: no requests (the scheduler counts a runner as using nothing) and no
         # limits. Set resources.requests (cpu, memory) and resources.limits (memory) here.

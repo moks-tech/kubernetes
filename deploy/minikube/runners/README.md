@@ -21,18 +21,46 @@ jobs:
 ```
 
 - **arm64.** Jobs run on mk4's arm64 workers (Hetzner CAX), like `ubuntu-24.04-arm`, not `ubuntu-latest` (x64).
-- **A bare image.** `ghcr.io/actions/actions-runner` is a minimal Ubuntu with `git`, `curl` and passwordless `sudo`.
-  It ships without the toolchains GitHub's own images have, so use the `setup-*` actions (`setup-node`, `setup-python`,
-  `setup-terraform`...) or `sudo apt-get install`.
-- **No Docker.** Jobs run inside the runner container. There is no Docker daemon, because Docker-in-Docker needs a
-  privileged container, which Gatekeeper refuses on mk4. Jobs that build images, or use `container:` or `services:`,
-  stay on GitHub-hosted runners.
+- **The image** is `ghcr.io/mrjithendar/mk4-runner` (below): GitHub's runner image plus the tools the organization's
+  workflows call without installing them. Languages come from the `setup-*` actions (`setup-node`, `setup-python`,
+  `setup-go`, `setup-terraform`...), as on GitHub-hosted runners; anything else: `sudo apt-get install`.
+- **No Docker daemon.** Jobs run inside the runner container. Docker-in-Docker needs a privileged container, which
+  Gatekeeper refuses on mk4, so `docker build`/`run`, `docker/*` actions, `helm/kind-action`, Docker container actions
+  (e.g. `bridgecrewio/checkov-action`), `container:` and `services:` fail here. The `docker` CLI is installed but has
+  nothing to talk to.
 - **Internet only.** NetworkPolicy `runners/runners` lets runner pods resolve names through CoreDNS and reach
   public addresses only, on any port. They cannot reach anything on mk4's private networks (pods, services, nodes)
   or the Hetzner metadata service, and no Service is exposed to them.
 - **Private repositories only.** The organization's `Default` runner group does not serve public repositories
   unless *Allow public repositories* is ticked (Settings → Actions → Runner groups). Leave it off: a pull request from
   a fork of a public repository would otherwise run its code on mk4.
+
+## The image
+
+[`image/Dockerfile`](image/Dockerfile), built on a GitHub-hosted arm64 runner by
+[`build-runner-image.yml`](../../../.github/workflows/build-runner-image.yml) (it needs a Docker daemon, which mk4's runners
+lack) and pushed to `ghcr.io/mrjithendar/mk4-runner` on `master`. Pull requests build and smoke-test it without pushing.
+
+From `ghcr.io/actions/actions-runner` (Ubuntu 24.04: `git`, `curl`, `jq`, `unzip`, `sudo`, the `docker` CLI), plus:
+
+| Added | Because (workflows that call it directly) |
+|---|---|
+| `git-lfs` | `actions/checkout` with `lfs: true` (jithendar.com `content.yml`) |
+| `python3`, `python3-dev`, `python3-pip`, `python3-venv`; `/etc/pip.conf` `break-system-packages = true` | `python3`/`pip install` without `setup-python` (jithendar.com, moks-cms); the shared libraries `setup-python`'s builds load. pip set up as on GitHub's Ubuntu images |
+| `build-essential` | native npm/pip modules; roboshop-ai-app `currency-service` |
+| `libgomp1` | LightGBM (moks-sre-agent) |
+| `shellcheck` | jithendar.com, k8s-deployments, moks-cms, moks-seo-agent, practice-programming |
+| `openssh-client` | `disk-cleanup.yml` |
+| `zstd` | `actions/cache` (moks-cms) compresses with it, as on GitHub's runners |
+| `gh` 2.105.0 | `gh api`/`gh pr` (moks-cms and others) |
+| `kubectl` v1.37.2 | k8s-deployments' deploy and disk-cleanup workflows (no `setup-kubectl`) |
+| `helm` v4.3.2 | k8s-deployments' check and deploy workflows (no `setup-helm`) |
+
+`gh`, `kubectl` and `helm` are release binaries checked against SHA-256 sums pinned in the Dockerfile.
+
+**Changing it:** edit the Dockerfile, then set `image:` in `values.yaml` to the tag the workflow names
+(`<runner version>-<first 12 hex of the Dockerfile's SHA-256>`; it fails the change until they match). After the push
+to `master` has built the image, apply Terraform to roll it out.
 
 ## Limits
 

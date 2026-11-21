@@ -1,0 +1,92 @@
+name: Build runner image
+
+# The mk4 runner scale set's image (deploy/minikube/runners/image/Dockerfile): GitHub's actions-runner plus the tools
+# the organization's workflows call directly. Pushed to ghcr.io/mrjithendar/mk4-runner on master; pull requests only
+# build and test it. Terraform (create-mk-infrastructure.yml, or a local apply) then rolls the tag in
+# deploy/minikube/runners/values.yaml out to the scale set.
+#
+# Runs on a GitHub-hosted arm64 runner, not on mk4: building an image needs a Docker daemon, which mk4's runners do not
+# have (Gatekeeper refuses the privileged container Docker-in-Docker needs; deploy/minikube/runners/README.md).
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'deploy/minikube/runners/image/**'
+      - 'deploy/minikube/runners/values.yaml'
+      - '.github/workflows/build-runner-image.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'deploy/minikube/runners/image/**'
+      - 'deploy/minikube/runners/values.yaml'
+      - '.github/workflows/build-runner-image.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-runner-image-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The tag is the runner version plus a hash of the Dockerfile, and values.yaml must already name it: what is
+      # pushed is exactly what Terraform deploys, and a changed Dockerfile can never reuse a tag nodes have cached.
+      - name: Image tag
+        id: tag
+        run: |
+          set -euo pipefail
+          dockerfile=deploy/minikube/runners/image/Dockerfile
+          runner=$(sed -nE 's#^FROM ghcr\.io/actions/actions-runner:([0-9.]+)$#\1#p' "$dockerfile")
+          [[ -n "$runner" ]] || { echo "::error file=$dockerfile::FROM must be ghcr.io/actions/actions-runner:<version>"; exit 1; }
+          want="ghcr.io/mrjithendar/mk4-runner:${runner}-$(sha256sum "$dockerfile" | cut -c1-12)"
+          have=$(sed -nE 's#^ *image: (ghcr\.io/mrjithendar/mk4-runner:[^ ]+)$#\1#p' deploy/minikube/runners/values.yaml)
+          [[ "$have" == "$want" ]] || { echo "::error file=deploy/minikube/runners/values.yaml::the runner image must be $want (the Dockerfile changed), not ${have:-missing}"; exit 1; }
+          echo "image=$want" >> "$GITHUB_OUTPUT"
+          echo "### Runner image: \`$want\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build
+        env:
+          IMAGE: ${{ steps.tag.outputs.image }}
+        run: docker build --pull --platform linux/arm64 -t "$IMAGE" deploy/minikube/runners/image
+
+      # Every tool the Dockerfile adds answers, as the runner user, and pip installs into ~/.local as on ubuntu-latest.
+      - name: Smoke test
+        env:
+          IMAGE: ${{ steps.tag.outputs.image }}
+        run: |
+          docker run --rm --entrypoint bash "$IMAGE" -euo pipefail -c '
+            test "$(id -un)" = runner
+            git lfs version; gh --version | head -1; kubectl version --client; helm version --short
+            shellcheck --version | sed -n 2p; python3 --version; pip --version; gcc --version | head -1; make --version | head -1
+            zstd --version; ssh -V; ldconfig -p | grep -q libgomp.so.1
+            pip install --quiet pyyaml==6.0.3 && python3 -c "import yaml"
+          '
+
+      - name: Push
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+        env:
+          IMAGE: ${{ steps.tag.outputs.image }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          if docker manifest inspect "$IMAGE" > /dev/null 2>&1; then
+            echo "::notice::$IMAGE is already published"
+          else
+            docker push "$IMAGE"
+          fi
+          docker logout ghcr.io
