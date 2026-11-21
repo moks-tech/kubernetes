@@ -44,8 +44,8 @@ masters_pool:
 
 worker_node_pools:
   - name: workers
-    instance_type: cax21
-    instance_count: 4
+    instance_type: cax31
+    instance_count: 3
     location: fsn1
     # autoscaling:          # enable later if needed; watch the budget
     #   enabled: true
