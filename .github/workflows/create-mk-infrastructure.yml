@@ -12,7 +12,7 @@ name: Create minikube infrastructure
 #          filled from MK4_API_SERVER, MK4_CA_DATA (variables) and MK4_TERRAFORM_TOKEN (secret of environment mk4).
 #   state  AWS role MK4_TERRAFORM_ROLE_ARN through GitHub OIDC (tools repository: infrastructure/github-minikube-terraform.tf):
 #          the S3 state object and its lock, nothing else.
-# Runs on the mk4 runner scale set (runs-on: mk4, deploy/minikube/runners/README.md).
+# Runs on the mk4 runner scale set (runs-on: ubuntu-24.04-arm, deploy/minikube/runners/README.md).
 on:
   workflow_dispatch:
     inputs:
@@ -50,7 +50,7 @@ concurrency:
 jobs:
   terraform:
     if: github.ref == 'refs/heads/master' && vars.MINIKUBE_TERRAFORM_APPLY == 'true'
-    runs-on: mk4
+    runs-on: ubuntu-24.04-arm
     environment: mk4
     timeout-minutes: 60
     permissions:
