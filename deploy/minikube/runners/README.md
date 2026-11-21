@@ -133,6 +133,29 @@ The scale set appears under the organization's Settings → Actions → Runners 
 GitHub refused the app's credentials: the controller's log says why. *Create minikube infrastructure* waits for the
 listener after each apply and fails if it is not running within 3 minutes.
 
+## Metrics and dashboards
+
+Grafana (<https://jithendar.com/grafana/>), folder **Platform**:
+
+| Dashboard | Shows | From |
+| --- | --- | --- |
+| **Platform · GitHub runners** | Listener and controller up; jobs running and waiting for a runner; runners busy, idle and the maximum; jobs finished, failed and cancelled; how long jobs wait for a runner and how long they run (p50, p95), per repository and per job; runner time used; ARC's reconciles and errors | Prometheus job `arc` |
+| **Platform · GitHub runner pods** | Each runner pod's CPU and memory (runner and dind) against the runner container's limit, and a per-pod table of peaks for sizing the requests; each worker's memory, CPU, memory pressure and OOM kills | cAdvisor (job `kubernetes-cadvisor`) |
+
+- **Turning metrics on:** `metrics:` in [`controller.yaml`](controller.yaml) makes the controller and every listener it
+  starts serve `:8080/metrics` (container port `metrics`). Without it the chart passes `--metrics-addr=0` and nothing
+  is exported. Prometheus job `arc` (`observability/prometheus/values.yaml`) finds both pods in `runners-system`.
+- **Labels:** `listenerMetrics` is unset in `values.yaml`, so the listener exports ARC's defaults: repository, job
+  name, event and result, but not the workflow ref (that would add one series per branch and pull request). Each
+  repository, job and event seen adds a counter and two histograms of about 50 buckets. To trim them, set
+  `listenerMetrics` there. A set block replaces the defaults, so it must list every metric the dashboard reads
+  (`tests/test_runners_monitoring.py`).
+- **Counting:** a job name's first run after the listener starts is not counted, since Prometheus needs an earlier
+  sample to see an increase. A listener restart (ARC upgrade, values change, node drain) starts the counters again.
+  *Wait for a runner* runs from GitHub assigning the job to `mk4` to a runner picking it up, in whole seconds.
+- **Pods and jobs:** runner pods are `mk4-runner-<random>`, and no metric links a pod to its job.
+  `kubectl -n runners get ephemeralrunners` shows which job each live pod runs.
+
 ## Upgrading ARC
 
 Helm installs the controller chart's CRDs only on first install and never upgrades them, so a new ARC version is not

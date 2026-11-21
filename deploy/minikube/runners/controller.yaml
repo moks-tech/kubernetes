@@ -5,3 +5,13 @@
 flags:
   # The chart's default is debug: every reconcile of every runner would land in Loki.
   logLevel: info
+
+# Prometheus metrics on :8080/metrics (container port "metrics") of the controller and of every listener it starts;
+# without this block the chart passes --metrics-addr=0 and both export nothing. Prometheus job arc scrapes them
+# (observability/prometheus/values.yaml); dashboards Platform · GitHub runners and Platform · GitHub runner pods
+# (README.md, "Metrics and dashboards"). Which metrics and labels the listener exports is the scale set's
+# listenerMetrics (values.yaml): unset, ARC's defaults.
+metrics:
+  controllerManagerAddr: ":8080"
+  listenerAddr: ":8080"
+  listenerEndpoint: "/metrics"
