@@ -1,6 +1,6 @@
 name: Check minikube infrastructure
 
-# Runs on GitHub-hosted runners with no cluster or AWS access: this repository is public, so pull request code
+# Runs on the mk4 runners with no cluster or AWS access: this repository is public, so pull request code
 # never gets the mk4 token or the state role (both live in the "mk4" environment, master only).
 on:
   workflow_dispatch:
@@ -26,7 +26,7 @@ permissions:
 
 jobs:
   terraform:
-    runs-on: ubuntu-latest
+    runs-on: mk4
     timeout-minutes: 15
     defaults:
       run:
