@@ -35,6 +35,12 @@ template:
         securityContext:
           privileged: true
         restartPolicy: Always
+        # A job's containers (docker build/run, services:, kind) run inside this container's cgroup, so it has no memory
+        # limit: a limit here would cap every Docker job. The request is the idle daemon (peak 0.2 GiB, 2026-11-21).
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
         startupProbe:
           exec:
             command: ["docker", "info"]
@@ -74,8 +80,17 @@ template:
             mountPath: /tmp
           - name: dind-sock
             mountPath: /var/run
-        # CPU and memory per runner pod. Unset: no requests (the scheduler counts a runner as using nothing) and no
-        # limits. Set resources.requests (cpu, memory) and resources.limits (memory) here, and on the dind sidecar.
+        # The job's own steps (npm, tsc, next build, pytest...). The requests are what the scheduler reserves on a node,
+        # so pods spread over the workers, and a job waits in Pending when no worker has the room. The memory limit
+        # makes a job that grows past it fail on its own (OOMKilled, exit 137) instead of starving the node. No CPU
+        # limit: a job may use any idle CPU. Measured 2026-11-21: up to 2.9 GiB (next build, then killed by the node
+        # OOM) and 2.7 cores.
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            memory: 3Gi
     volumes:
       - name: work
         emptyDir: {}
