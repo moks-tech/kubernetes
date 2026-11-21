@@ -17,6 +17,7 @@ on:
       - 'deploy/minikube/argocd/**'
       - 'deploy/minikube/harbor/values.yaml'
       - 'deploy/minikube/harbor/access/**'
+      - 'deploy/minikube/runners/**'
       - '.github/mk4-terraform-kubeconfig.yaml'
       - '.github/workflows/*-mk-infrastructure.yml'
 

@@ -9,7 +9,8 @@
 # nodeAffinity, so a pod that lands on another node starts on an empty volume: check the node before merging.
 #
 # Not covered, because Dependabot cannot read them; bump these by hand: Helm chart versions in
-# deploy/minikube/applications/*.yaml and the helm_release blocks in minikube-infrastructure/*.tf, scripts/argocd/ and
+# deploy/minikube/applications/*.yaml and the helm_release blocks in minikube-infrastructure/*.tf (ARC: an uninstall and
+# reinstall, deploy/minikube/runners/README.md), scripts/argocd/ and
 # deploy/minikube/deploy-*.sh, terraform_version in the workflows, the Harbor images (custom tags in
 # deploy/minikube/harbor/values.yaml, built by build-harbor-images.yml), and the Vault image
 # (deploy/minikube/vault/values.yaml has no Chart.yaml, and tests/test_vault_chart.py pins it).
@@ -24,6 +25,8 @@ updates:
       - /deploy/minikube/ecr-refresh
       - /deploy/minikube/harbor/manifests
       - /deploy/minikube/harbor/examples
+      # The runner image in the scale set's values.yaml: GitHub stops sending jobs to runner versions that are too old.
+      - /deploy/minikube/runners
     schedule:
       interval: weekly
       day: monday
