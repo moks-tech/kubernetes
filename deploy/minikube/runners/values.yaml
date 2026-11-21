@@ -1,0 +1,22 @@
+# Runner scale set mk4 (chart gha-runner-scale-set), installed by minikube-infrastructure/runners.tf as release
+# arc-runners in namespace runners. Workflows run on it with `runs-on: mk4`. Terraform adds githubConfigUrl
+# (var.github_runners_config_url), githubConfigSecret (Secret runners/github-app), runnerScaleSetName and
+# controllerServiceAccount (README.md).
+
+# How many runners. Both unset: no runner waits idle (a pod starts when a job is queued) and there is no upper limit
+# (one pod per queued job). Set them here: maxRunners is also what bounds how much of the workers CI can take.
+# minRunners:
+# maxRunners:
+
+# No containerMode: each job runs inside the runner container itself. dind needs a privileged container, which
+# Gatekeeper refuses (gatekeeper/constraints/values.yaml), so jobs that build images or use container: / services:
+# stay on GitHub-hosted runners.
+template:
+  spec:
+    containers:
+      - name: runner
+        # Pinned (the chart's default is :latest, which Gatekeeper warns about). Multi-arch; mk4's nodes are arm64.
+        image: ghcr.io/actions/actions-runner:2.338.2
+        command: ["/home/runner/run.sh"]
+        # CPU and memory per runner pod. Unset: no requests (the scheduler counts a runner as using nothing) and no
+        # limits. Set resources.requests (cpu, memory) and resources.limits (memory) here.

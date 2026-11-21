@@ -1,7 +1,8 @@
 name: Create minikube infrastructure
 
 # Applies minikube-infrastructure/ (Helm releases on mk4: metrics-server, cert-manager, Let's Encrypt, Istio (+ CNI, ingress gateway), Kiali,
-# Prometheus, Grafana, Loki, OpenTelemetry Collector, Jaeger, local-path storage, CloudNativePG + PostgreSQL, OPA Gatekeeper) on pushes to master, or by hand with "plan only" to see
+# Prometheus, Grafana, Loki, OpenTelemetry Collector, Jaeger, local-path storage, CloudNativePG + PostgreSQL, OPA Gatekeeper, the GitHub
+# Actions runners) on pushes to master, or by hand with "plan only" to see
 # drift. Pull requests are checked by check-mk-infrastructure.yml.
 # Off until repository variable MINIKUBE_TERRAFORM_APPLY is "true": set it after the one-time move of the live add-ons
 # off Argo CD (minikube-infrastructure/README.md), never before.
@@ -34,6 +35,7 @@ on:
       - 'deploy/minikube/argocd/**'
       - 'deploy/minikube/harbor/values.yaml'
       - 'deploy/minikube/harbor/access/**'
+      - 'deploy/minikube/runners/**'
       - '.github/mk4-terraform-kubeconfig.yaml'
       - '.github/workflows/create-mk-infrastructure.yml'
 
@@ -65,6 +67,11 @@ jobs:
       # Harbor's pull Secret for its private arm64 images (minikube-infrastructure/harbor.tf).
       TF_VAR_dockerhub_username: ${{ secrets.DOCKER_USERNAME }}
       TF_VAR_dockerhub_password: ${{ secrets.DOCKER_PASSWORD }}
+      # The GitHub App the runner controller signs in as (minikube-infrastructure/runners.tf): secrets of environment
+      # mk4, so only master's deploy job sees the private key (deploy/minikube/runners/README.md, "Credentials").
+      TF_VAR_github_runners_app_id: ${{ secrets.RUNNERS_GITHUB_APP_ID }}
+      TF_VAR_github_runners_app_installation_id: ${{ secrets.RUNNERS_GITHUB_APP_INSTALLATION_ID }}
+      TF_VAR_github_runners_app_private_key: ${{ secrets.RUNNERS_GITHUB_APP_PRIVATE_KEY }}
 
     steps:
       # miniKube and jithendar.com side by side, as on a workstation: grafana.tf reads ../jithendar.com/grafana.
@@ -100,10 +107,11 @@ jobs:
           MK4_TERRAFORM_TOKEN: ${{ secrets.MK4_TERRAFORM_TOKEN }}
         run: |
           missing=()
-          for v in MK4_TERRAFORM_ROLE_ARN MK4_API_SERVER MK4_CA_DATA MK4_TERRAFORM_TOKEN TF_VAR_dockerhub_username TF_VAR_dockerhub_password; do
+          for v in MK4_TERRAFORM_ROLE_ARN MK4_API_SERVER MK4_CA_DATA MK4_TERRAFORM_TOKEN TF_VAR_dockerhub_username TF_VAR_dockerhub_password \
+                   TF_VAR_github_runners_app_id TF_VAR_github_runners_app_installation_id TF_VAR_github_runners_app_private_key; do
             [[ -n "${!v}" ]] || missing+=("$v")
           done
-          [[ ${#missing[@]} -eq 0 ]] || { echo "::error::Not set: ${missing[*]}. Run scripts/setup-minikube-terraform-ci.sh (TF_VAR_dockerhub_*: repository secrets DOCKER_USERNAME, DOCKER_PASSWORD)"; exit 1; }
+          [[ ${#missing[@]} -eq 0 ]] || { echo "::error::Not set: ${missing[*]}. Run scripts/setup-minikube-terraform-ci.sh (TF_VAR_dockerhub_*: repository secrets DOCKER_USERNAME, DOCKER_PASSWORD; TF_VAR_github_runners_app_*: secrets RUNNERS_GITHUB_APP_ID, RUNNERS_GITHUB_APP_INSTALLATION_ID, RUNNERS_GITHUB_APP_PRIVATE_KEY of environment mk4, deploy/minikube/runners/README.md)"; exit 1; }
 
       - name: AWS credentials (state only)
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
@@ -204,9 +212,9 @@ jobs:
         run: |
           set -euo pipefail
           # Only this root's releases.
-          releases='^(metrics-server|cert-manager|letsencrypt-jithendar|istio-base|istio-cni|istiod|istio-ingressgateway|istio-edge|istio-mesh|kiali|prometheus|grafana-dashboards|grafana|loki|otel-collector|jaeger|local-path-provisioner|cnpg|barman-cloud|postgres-cluster|postgres-access|argocd|harbor-access|harbor|gatekeeper|gatekeeper-library|gatekeeper-constraints)$'
+          releases='^(metrics-server|cert-manager|letsencrypt-jithendar|istio-base|istio-cni|istiod|istio-ingressgateway|istio-edge|istio-mesh|kiali|prometheus|grafana-dashboards|grafana|loki|otel-collector|jaeger|local-path-provisioner|cnpg|barman-cloud|postgres-cluster|postgres-access|argocd|harbor-access|harbor|gatekeeper|gatekeeper-library|gatekeeper-constraints|arc|arc-runners)$'
           { echo '### Helm releases'; echo '```'; helm list -A --kube-context mk4 --filter "$releases"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-          expected=27
+          expected=29
           deployed=$(helm list -A --kube-context mk4 --filter "$releases" --deployed -q | wc -l)
           [[ "$deployed" -eq "$expected" ]] || { echo "::error::$deployed of $expected releases deployed"; helm list -A --kube-context mk4 --filter "$releases"; exit 1; }
           # A freshly started pod (Kiali warms its caches) and a new route answer 503 for a while: retry for 3 min.
@@ -221,6 +229,21 @@ jobs:
             echo "https://jithendar.com/$path -> $code"
             [[ "$code" =~ ^(200|302|401|403)$ ]] || { echo "::error::/$path answered $code for 3 minutes"; exit 1; }
           done
+          # Helm only waits for the controller. The scale set's listener starts once GitHub has accepted the app's
+          # credentials and registered scale set mk4 (deploy/minikube/runners/README.md, "Checks").
+          listener='app.kubernetes.io/component=runner-scale-set-listener,actions.github.com/scale-set-name=mk4'
+          for attempt in $(seq 1 18); do
+            phase=$(kubectl --request-timeout=20s -n runners-system get pods -l "$listener" -o jsonpath='{.items[*].status.phase}' 2>/dev/null || true)
+            [[ "$phase" == Running ]] && break
+            echo "runner scale set listener: '${phase:-no pod}' (attempt $attempt of 18), retrying in 10 s"
+            sleep 10
+          done
+          if [[ "$phase" != Running ]]; then
+            echo "::error::The listener of runner scale set mk4 is not running after 3 minutes: GitHub may have refused the app's credentials"
+            kubectl --request-timeout=20s -n runners-system logs deploy/arc-gha-rs-controller --tail=40 | grep -iE 'error|fail' || true
+            exit 1
+          fi
+          echo "runner scale set mk4: listener Running"
 
       # The plan and the kubeconfig hold credentials; do not leave them on the runner.
       - name: remove plan and kubeconfig

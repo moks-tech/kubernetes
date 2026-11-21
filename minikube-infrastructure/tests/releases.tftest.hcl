@@ -24,6 +24,10 @@ variables {
   redis_allowed_ips    = ["192.0.2.1/32"]
   dockerhub_username   = "ci"
   dockerhub_password   = "token"
+  # The runners' GitHub App (runners.tf).
+  github_runners_app_id              = "1"
+  github_runners_app_installation_id = "2"
+  github_runners_app_private_key     = "-----BEGIN RSA PRIVATE KEY-----"
 }
 
 run "pinned_releases" {
@@ -385,4 +389,69 @@ run "gatekeeper_releases" {
     condition     = time_sleep.gatekeeper_constraint_kinds.create_duration == "30s"
     error_message = "Constraints wait for Gatekeeper to create their kinds after the templates."
   }
+}
+
+run "github_runners" {
+  command = plan
+
+  assert {
+    condition = (
+      helm_release.arc_controller.version == "0.15.1" &&
+      helm_release.arc_runners.version == helm_release.arc_controller.version &&
+      helm_release.arc_controller.namespace == "runners-system" &&
+      helm_release.arc_runners.namespace == "runners" &&
+      kubernetes_secret_v1.runners_github_app.metadata[0].namespace == helm_release.arc_runners.namespace &&
+      kubernetes_network_policy_v1.runners.metadata[0].namespace == helm_release.arc_runners.namespace
+    )
+    error_message = "ARC is pinned, both charts on one version; the controller and the runners have their own namespaces, the app's Secret and the NetworkPolicy sit with the runners."
+  }
+
+  assert {
+    condition = (
+      yamldecode(helm_release.arc_runners.values[1]).githubConfigUrl == "https://github.com/mrjithendar" &&
+      yamldecode(helm_release.arc_runners.values[1]).githubConfigSecret == "github-app" &&
+      yamldecode(helm_release.arc_runners.values[1]).runnerScaleSetName == "mk4" &&
+      yamldecode(helm_release.arc_runners.values[1]).controllerServiceAccount.namespace == "runners-system" &&
+      yamldecode(helm_release.arc_runners.values[1]).controllerServiceAccount.name == "arc-gha-rs-controller"
+    )
+    error_message = "Scale set mk4 registers for the organization mrjithendar with Secret github-app and the controller's ServiceAccount."
+  }
+
+  assert {
+    condition = (
+      !strcontains(yamldecode(helm_release.arc_runners.values[0]).template.spec.containers[0].image, ":latest") &&
+      !can(yamldecode(helm_release.arc_runners.values[0]).containerMode)
+    )
+    error_message = "The runner image is pinned, and there is no containerMode (dind needs a privileged container, which Gatekeeper refuses)."
+  }
+
+  assert {
+    condition = (
+      kubernetes_network_policy_v1.runners.spec[0].policy_types == tolist(["Ingress", "Egress"]) &&
+      length(kubernetes_network_policy_v1.runners.spec[0].ingress) == 0 &&
+      contains(kubernetes_network_policy_v1.runners.spec[0].egress[1].to[0].ip_block[0].except, "10.0.0.0/8") &&
+      contains(kubernetes_network_policy_v1.runners.spec[0].egress[1].to[0].ip_block[0].except, "169.254.0.0/16")
+    )
+    error_message = "Runner pods accept no connections and reach public addresses only (not mk4's networks or the metadata service)."
+  }
+}
+
+run "github_runners_without_app_fails" {
+  command = plan
+
+  variables {
+    github_runners_app_private_key = ""
+  }
+
+  expect_failures = [kubernetes_secret_v1.runners_github_app]
+}
+
+run "github_runners_bad_config_url_fails" {
+  command = plan
+
+  variables {
+    github_runners_config_url = "github.com/mrjithendar"
+  }
+
+  expect_failures = [var.github_runners_config_url]
 }

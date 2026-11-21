@@ -42,3 +42,7 @@ redis_tenants = {
   harbor   = { namespace = "harbor", databases = [2, 3, 4, 5] } # core, jobservice, registry, trivy
   roboshop = { namespace = "roboshop-ai", databases = [6] }     # cart and shipping cache
 }
+
+# GitHub Actions runners (runners.tf): one scale set for every repository of the organization mrjithendar
+# (runs-on: mk4). The GitHub App's credentials come from secrets of environment mk4, not from this file.
+github_runners_config_url = "https://github.com/mrjithendar"

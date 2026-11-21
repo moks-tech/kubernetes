@@ -1,0 +1,7 @@
+# Actions Runner Controller (chart gha-runner-scale-set-controller), installed by minikube-infrastructure/runners.tf
+# as release arc in namespace runners-system. It watches every namespace for runner scale sets and runs one listener
+# pod per scale set here (README.md).
+
+flags:
+  # The chart's default is debug: every reconcile of every runner would land in Loki.
+  logLevel: info

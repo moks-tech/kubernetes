@@ -161,3 +161,31 @@ variable "cloudflare_access" {
     error_message = "team_domain is <team>.cloudflareaccess.com and audiences lists at least one AUD tag."
   }
 }
+
+variable "github_runners_config_url" {
+  description = "Where the runner scale set registers (runners.tf): https://github.com/<organization> for every repository of an organization, or https://github.com/<owner>/<repository> for one repository."
+  type        = string
+  validation {
+    condition     = can(regex("^https://github\\.com/[A-Za-z0-9-]+(/[A-Za-z0-9._-]+)?$", var.github_runners_config_url))
+    error_message = "github_runners_config_url is https://github.com/<organization> or https://github.com/<owner>/<repository>."
+  }
+}
+
+variable "github_runners_app_id" {
+  description = "App ID (or Client ID) of the GitHub App the runner controller signs in as (runners.tf). CI: secret RUNNERS_GITHUB_APP_ID of environment mk4; locally: export TF_VAR_github_runners_app_id."
+  type        = string
+  default     = ""
+}
+
+variable "github_runners_app_installation_id" {
+  description = "That app's installation ID on the organization. CI: secret RUNNERS_GITHUB_APP_INSTALLATION_ID of environment mk4; locally: export TF_VAR_github_runners_app_installation_id."
+  type        = string
+  default     = ""
+}
+
+variable "github_runners_app_private_key" {
+  description = "That app's private key (PEM). CI: secret RUNNERS_GITHUB_APP_PRIVATE_KEY of environment mk4; locally: export TF_VAR_github_runners_app_private_key=\"$(cat <file>.pem)\". Never in a tfvars file."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
