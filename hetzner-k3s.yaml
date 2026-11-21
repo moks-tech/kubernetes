@@ -8,10 +8,13 @@
 # CAX31	8	16 GB	about twice the price of CAX21
 # CAX41	16	32 GB	
 
+# export HCLOUD_TOKEN="YOUR_HETZNER_API_TOKEN"
+
 cluster_name: jithendar
 kubeconfig_path: "./kubeconfig-hetzner"
 k3s_version: v1.37.2+k3s1
 config_format_version: 1
+# hetzner_token:
 
 networking:
   ssh:
@@ -44,8 +47,16 @@ masters_pool:
 
 worker_node_pools:
   - name: workers
+    instance_type: cax21
+    instance_count: 2
+    location: fsn1
+    # autoscaling:          # enable later if needed; watch the budget
+    #   enabled: true
+    #   min_instances: 2
+    #   max_instances: 3
+  - name: workers1
     instance_type: cax31
-    instance_count: 3
+    instance_count: 1
     location: fsn1
     # autoscaling:          # enable later if needed; watch the budget
     #   enabled: true
