@@ -73,6 +73,10 @@ From `ghcr.io/actions/actions-runner` (Ubuntu 24.04: `git`, `curl`, `jq`, `unzip
 
 `gh`, `kubectl` and `helm` are release binaries checked against SHA-256 sums pinned in the Dockerfile.
 
+`/home/runner` is mode 755 (writable by the runner user only), as on GitHub's Ubuntu runners. The base image makes it
+777, and platformdirs refuses to create `~/.cache/<app>` under a directory other users can write: pip-audit (moks-seo-agent
+`ci.yml`) failed with `PermissionError: /home/runner, writable by another user`. The smoke test checks both.
+
 **Changing it:** edit the Dockerfile, then set `image:` in `values.yaml` to the tag the workflow names
 (`<runner version>-<first 12 hex of the Dockerfile's SHA-256>`; it fails the change until they match). After the push
 to `master` has built the image, apply Terraform to roll it out.

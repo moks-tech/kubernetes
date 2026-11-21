@@ -53,8 +53,12 @@ jobs:
           runner=$(sed -nE 's#^FROM ghcr\.io/actions/actions-runner:([0-9.]+)$#\1#p' "$dockerfile")
           [[ -n "$runner" ]] || { echo "::error file=$dockerfile::FROM must be ghcr.io/actions/actions-runner:<version>"; exit 1; }
           want="ghcr.io/mrjithendar/mk4-runner:${runner}-$(sha256sum "$dockerfile" | cut -c1-12)"
-          have=$(sed -nE 's#^ *image: (ghcr\.io/mrjithendar/mk4-runner:[^ ]+)$#\1#p' deploy/minikube/runners/values.yaml)
-          [[ "$have" == "$want" ]] || { echo "::error file=deploy/minikube/runners/values.yaml::the runner image must be $want (the Dockerfile changed), not ${have:-missing}"; exit 1; }
+          # Every line naming it (the runner container, and the init container that copies its externals for dind).
+          mapfile -t have < <(sed -nE 's#^ *image: (ghcr\.io/mrjithendar/mk4-runner:[^ ]+)$#\1#p' deploy/minikube/runners/values.yaml)
+          (( ${#have[@]} )) || { echo "::error file=deploy/minikube/runners/values.yaml::the runner image must be $want, not missing"; exit 1; }
+          for image in "${have[@]}"; do
+            [[ "$image" == "$want" ]] || { echo "::error file=deploy/minikube/runners/values.yaml::the runner image must be $want (the Dockerfile changed), not $image"; exit 1; }
+          done
           echo "image=$want" >> "$GITHUB_OUTPUT"
           echo "### Runner image: \`$want\`" >> "$GITHUB_STEP_SUMMARY"
 
@@ -64,6 +68,7 @@ jobs:
         run: docker build --pull --platform linux/arm64 -t "$IMAGE" deploy/minikube/runners/image
 
       # Every tool the Dockerfile adds answers, as the runner user, and pip installs into ~/.local as on ubuntu-latest.
+      # The home directory is the runner's alone, so platformdirs (pip-audit's cache) can create ~/.cache/<app>.
       - name: Smoke test
         env:
           IMAGE: ${{ steps.tag.outputs.image }}
@@ -74,6 +79,9 @@ jobs:
             shellcheck --version | sed -n 2p; python3 --version; pip --version; gcc --version | head -1; make --version | head -1
             zstd --version; ssh -V; ldconfig -p | grep -q libgomp.so.1
             pip install --quiet pyyaml==6.0.3 && python3 -c "import yaml"
+            test "$(stat -c %a /home/runner)" = 755
+            pip install --quiet platformdirs==4.14.8
+            python3 -c "import platformdirs; platformdirs.user_cache_path(\"mk4-smoke\", appauthor=False, ensure_exists=True)"
           '
 
       - name: Push
