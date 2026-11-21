@@ -121,6 +121,41 @@ extraScrapeConfigs:
         target_label: pod
       - target_label: service
         replacement: valkey
+  # GitHub Actions runners (deploy/minikube/runners): Actions Runner Controller's controller and the mk4 scale set's
+  # listener, both in runners-system, found by pod: container port "metrics" (:8080, runners/controller.yaml). component
+  # is controller or listener. Not meshed, so the scrapes are plain text. No namespace target label: the listener's
+  # series carry the scale set's own name (mk4) and namespace (runners). Kept: ARC's own gha_* series and the
+  # controller's reconcile counters and queue depth; its other controller-runtime, REST client and Go series dropped.
+  # Dashboards: Platform · GitHub runners (this job) and Platform · GitHub runner pods (cAdvisor).
+  - job_name: arc
+    metrics_path: /metrics
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names: [runners-system]
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_container_port_name]
+        regex: metrics
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_phase]
+        regex: Pending|Succeeded|Failed
+        action: drop
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: instance
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
+        regex: controller-manager
+        target_label: component
+        replacement: controller
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
+        regex: runner-scale-set-listener
+        target_label: component
+        replacement: listener
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'gha_.+|controller_runtime_reconcile_(total|errors_total)|workqueue_depth'
+        action: keep
   - job_name: loki
     static_configs:
       - targets: ["loki.monitoring.svc.cluster.local:3100"]
