@@ -87,10 +87,10 @@ template:
         # OOM) and 2.7 cores.
         resources:
           requests:
-            cpu: 500m
-            memory: 1Gi
+            cpu: 1000m
+            memory: 2Gi
           limits:
-            memory: 3Gi
+            memory: 4Gi
     volumes:
       - name: work
         emptyDir: {}
