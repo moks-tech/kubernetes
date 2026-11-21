@@ -3,6 +3,11 @@
 # Delete:  hetzner-k3s delete --config hetzner-k3s.yaml
 # export KUBECONFIG=$PWD/kubeconfig-hetzner && kubectl get nodes
 
+# Type	Cores	RAM	
+# CAX21	4	8 GB	w1, w2, w3 today
+# CAX31	8	16 GB	about twice the price of CAX21
+# CAX41	16	32 GB	
+
 cluster_name: jithendar
 kubeconfig_path: "./kubeconfig-hetzner"
 k3s_version: v1.37.2+k3s1
