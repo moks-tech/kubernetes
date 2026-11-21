@@ -79,9 +79,18 @@ to `master` has built the image, apply Terraform to roll it out.
 
 ## Limits
 
-`deploy/minikube/runners/values.yaml` sets none yet: no `minRunners` (no runner waits idle), no `maxRunners` (one pod
-per queued job, without bound), and no CPU or memory requests or limits on the runner pod. Set them there before
-pointing busy workflows here; the workers also run every application on mk4.
+`deploy/minikube/runners/values.yaml` sets no `minRunners` (no runner waits idle) and no `maxRunners` (one pod per
+queued job, without bound). What bounds CI is each pod's CPU and memory requests:
+
+| Container | Requests | Limits |
+| --- | --- | --- |
+| `runner` (the job's steps) | 500m CPU, 1Gi memory | 3Gi memory |
+| `dind` (the job's Docker containers) | 100m CPU, 256Mi memory | none |
+
+The scheduler places a runner pod only on a worker with that much unreserved, so pods spread over the workers, and a
+job waits (pod Pending, job queued) while none has room. The workers also run every application on mk4. A step that
+goes past 3Gi is OOMKilled in its pod (exit 137) instead of starving the node. Docker jobs have no memory limit, since
+dind's containers share its cgroup.
 
 ## Credentials: a GitHub App (once)
 
