@@ -419,10 +419,23 @@ run "github_runners" {
 
   assert {
     condition = (
-      !strcontains(yamldecode(helm_release.arc_runners.values[0]).template.spec.containers[0].image, ":latest") &&
+      can(regex("^ghcr\\.io/mrjithendar/mk4-runner:[0-9.]+-[0-9a-f]{12}$", yamldecode(helm_release.arc_runners.values[0]).template.spec.containers[0].image)) &&
+      yamldecode(helm_release.arc_runners.values[0]).template.spec.initContainers[0].image == yamldecode(helm_release.arc_runners.values[0]).template.spec.containers[0].image &&
       !can(yamldecode(helm_release.arc_runners.values[0]).containerMode)
     )
-    error_message = "The runner image is pinned, and there is no containerMode (dind needs a privileged container, which Gatekeeper refuses)."
+    error_message = "Runners use the organization's pinned runner image (build-runner-image.yml), init container included; the dind layout is written out, not containerMode (whose docker:dind is unpinned)."
+  }
+
+  assert {
+    condition = (
+      can(regex("^docker:[0-9.]+-dind$", yamldecode(helm_release.arc_runners.values[0]).template.spec.initContainers[1].image)) &&
+      yamldecode(helm_release.arc_runners.values[0]).template.spec.initContainers[1].securityContext.privileged &&
+      yamldecode(helm_release.arc_runners.values[0]).template.spec.initContainers[1].restartPolicy == "Always" &&
+      kubernetes_namespace_v1.runners.metadata[0].labels["pod-security.kubernetes.io/enforce"] == "privileged" &&
+      kubernetes_namespace_v1.runners_system.metadata[0].labels["pod-security.kubernetes.io/enforce"] == "baseline" &&
+      contains(yamldecode(file("${local.minikube}/gatekeeper/constraints/values.yaml")).privilegedContainers.excludedNamespaces, "runners")
+    )
+    error_message = "Each runner pod has a pinned, privileged dind sidecar; only namespace runners admits it (Pod Security privileged, Gatekeeper exclusion), the controller's namespace stays baseline."
   }
 
   assert {

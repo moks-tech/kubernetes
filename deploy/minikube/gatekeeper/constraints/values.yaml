@@ -13,7 +13,9 @@ excludedNamespaces: [kube-system, gatekeeper-system]
 
 privilegedContainers:
   enforcementAction: deny
-  excludedNamespaces: []
+  # runners: each GitHub Actions runner pod's Docker daemon (dind sidecar, runners/values.yaml) must be privileged.
+  # A job there can take over its node; deploy/minikube/runners/README.md, "Docker".
+  excludedNamespaces: [runners]
 
 hostNamespaces:
   # hostPID and hostIPC.

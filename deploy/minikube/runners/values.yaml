@@ -8,16 +8,82 @@
 # minRunners:
 # maxRunners:
 
-# No containerMode: each job runs inside the runner container itself. dind needs a privileged container, which
-# Gatekeeper refuses (gatekeeper/constraints/values.yaml), so there is no Docker daemon: jobs that build images, run
-# docker, or use container: / services: fail here.
+# Docker for every job: a privileged Docker daemon (dind) beside the runner, so docker build/run, docker/* actions,
+# kind, container actions, container: and services: work. The chart's containerMode dind renders this same layout
+# with an unpinned docker:dind, so it is written out here instead (containerMode stays unset). Privileged is allowed in
+# namespace runners only (Gatekeeper exclusion, Pod Security privileged): a job can take over its node (README.md,
+# "Docker").
 template:
   spec:
+    initContainers:
+      # The runner's externals (its Node.js for JavaScript actions) copied where the Docker daemon sees them, for
+      # container actions and container: jobs.
+      - name: init-dind-externals
+        image: ghcr.io/mrjithendar/mk4-runner:2.338.2-48743dc57f6a
+        command: ["cp"]
+        args: ["-r", "/home/runner/externals/.", "/home/runner/tmpDir/"]
+        volumeMounts:
+          - name: dind-externals
+            mountPath: /home/runner/tmpDir
+      # A native sidecar (restartPolicy: Always): starts, and answers docker info, before the runner; stops after it.
+      - name: dind
+        image: docker:29.9.2-dind # the runner image's Docker CLI version
+        args: ["dockerd", "--host=unix:///var/run/docker.sock", "--group=$(DOCKER_GROUP_GID)"]
+        env:
+          - name: DOCKER_GROUP_GID
+            value: "123" # group docker in the runner image; the runner user is in it
+        securityContext:
+          privileged: true
+        restartPolicy: Always
+        startupProbe:
+          exec:
+            command: ["docker", "info"]
+          initialDelaySeconds: 0
+          failureThreshold: 24
+          periodSeconds: 5
+        volumeMounts:
+          # Same paths as in the runner, so docker run -v <path> finds the job's files: the workspace, and /tmp
+          # (scripts bind-mount mktemp -d folders, e.g. jithendar.com check-content.sh).
+          - name: work
+            mountPath: /home/runner/_work
+          - name: tmp
+            mountPath: /tmp
+          - name: dind-sock
+            mountPath: /var/run
+          - name: dind-externals
+            mountPath: /home/runner/externals
+          # Images and containers on the node's disk (an emptyDir: overlay2 cannot run on the container's overlay).
+          # Gone with the pod: every job starts with an empty image cache.
+          - name: dind-storage
+            mountPath: /var/lib/docker
     containers:
       - name: runner
         # GitHub's runner image plus the organization's tools (image/Dockerfile), built by build-runner-image.yml. The
         # tag is <runner version>-<12 hex of the Dockerfile's SHA-256>; that workflow fails until this line matches.
         image: ghcr.io/mrjithendar/mk4-runner:2.338.2-48743dc57f6a
         command: ["/home/runner/run.sh"]
+        env:
+          - name: DOCKER_HOST
+            value: unix:///var/run/docker.sock
+          - name: RUNNER_WAIT_FOR_DOCKER_IN_SECONDS
+            value: "120"
+        volumeMounts:
+          - name: work
+            mountPath: /home/runner/_work
+          - name: tmp
+            mountPath: /tmp
+          - name: dind-sock
+            mountPath: /var/run
         # CPU and memory per runner pod. Unset: no requests (the scheduler counts a runner as using nothing) and no
-        # limits. Set resources.requests (cpu, memory) and resources.limits (memory) here.
+        # limits. Set resources.requests (cpu, memory) and resources.limits (memory) here, and on the dind sidecar.
+    volumes:
+      - name: work
+        emptyDir: {}
+      - name: tmp
+        emptyDir: {}
+      - name: dind-sock
+        emptyDir: {}
+      - name: dind-externals
+        emptyDir: {}
+      - name: dind-storage
+        emptyDir: {}

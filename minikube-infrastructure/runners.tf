@@ -19,7 +19,9 @@ locals {
   runners_controller_sa = "arc-gha-rs-controller" # chart gha-runner-scale-set-controller: <release>-gha-rs-controller
 }
 
-# Not in the mesh: nothing here serves or calls anything on mk4. Pod Security baseline on top of Gatekeeper.
+# Not in the mesh: nothing here serves or calls anything on mk4. Pod Security on top of Gatekeeper: baseline for the
+# controller; privileged for the runners, whose Docker daemon (dind sidecar) is a privileged container (Gatekeeper's
+# privilegedContainers constraint excludes this namespace too; deploy/minikube/runners/README.md, "Docker").
 resource "kubernetes_namespace_v1" "runners_system" {
   metadata {
     name = "runners-system"
@@ -35,7 +37,7 @@ resource "kubernetes_namespace_v1" "runners" {
     name = "runners"
     labels = {
       "app.kubernetes.io/part-of"          = "github-runners"
-      "pod-security.kubernetes.io/enforce" = "baseline"
+      "pod-security.kubernetes.io/enforce" = "privileged"
     }
   }
 }
@@ -148,6 +150,7 @@ resource "helm_release" "arc_runners" {
   wait    = true
   timeout = var.helm_timeout
 
-  # The AutoscalingRunnerSet CRD comes with the controller; no runner pod starts before its NetworkPolicy.
-  depends_on = [helm_release.arc_controller, kubernetes_network_policy_v1.runners]
+  # The AutoscalingRunnerSet CRD comes with the controller; no runner pod starts before its NetworkPolicy, or before
+  # Gatekeeper admits its privileged dind sidecar in this namespace.
+  depends_on = [helm_release.arc_controller, kubernetes_network_policy_v1.runners, helm_release.gatekeeper_constraints]
 }

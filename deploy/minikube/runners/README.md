@@ -24,22 +24,37 @@ jobs:
 - **The image** is `ghcr.io/mrjithendar/mk4-runner` (below): GitHub's runner image plus the tools the organization's
   workflows call without installing them. Languages come from the `setup-*` actions (`setup-node`, `setup-python`,
   `setup-go`, `setup-terraform`...), as on GitHub-hosted runners; anything else: `sudo apt-get install`.
-- **No Docker daemon.** Jobs run inside the runner container. Docker-in-Docker needs a privileged container, which
-  Gatekeeper refuses on mk4, so `docker build`/`run`, `docker/*` actions, `helm/kind-action`, Docker container actions
-  (e.g. `bridgecrewio/checkov-action`), `container:` and `services:` fail here. The `docker` CLI is installed but has
-  nothing to talk to.
+- **Docker.** Every runner pod has its own Docker daemon (below), so `docker build`/`run`, `docker/*` actions,
+  `helm/kind-action`, container actions (e.g. `bridgecrewio/checkov-action`), `container:` and `services:` work. Each
+  job starts with an empty image cache.
 - **Internet only.** NetworkPolicy `runners/runners` lets runner pods resolve names through CoreDNS and reach
   public addresses only, on any port. They cannot reach anything on mk4's private networks (pods, services, nodes)
   or the Hetzner metadata service, and no Service is exposed to them.
-- **Private repositories only.** The organization's `Default` runner group does not serve public repositories
-  unless *Allow public repositories* is ticked (Settings → Actions → Runner groups). Leave it off: a pull request from
-  a fork of a public repository would otherwise run its code on mk4.
+- **Public repositories.** The organization's `Default` runner group serves public repositories only while
+  *Allow public repositories* is ticked (Settings → Actions → Runner groups). With it ticked, a pull request from a
+  fork of a public repository runs its own workflow file on mk4, with a privileged Docker daemon (below).
+
+## Docker
+
+Each runner pod runs `docker:29.9.2-dind` as a native sidecar (`values.yaml`), with the runner's workspace, `/tmp`
+and `/var/run` (the socket) shared, so `docker run -v <path>` sees the job's files. Its images and containers live in
+an `emptyDir` on the node's disk and disappear with the pod.
+
+The Docker daemon must be a **privileged** container. mk4 allows that in namespace `runners` only: Gatekeeper's
+`privilegedContainers` constraint excludes it (`gatekeeper/constraints/values.yaml`) and its Pod Security level is
+`privileged` (`runners.tf`). Host networking, host namespaces and `hostPath` volumes stay refused there.
+
+**What that means:** a privileged container is root on its node. Any job (its workflow, or any action, package or
+image it pulls) can read the node's disk, including other pods' volumes and Secrets, and the k3s credentials, and
+from there take over the cluster. The NetworkPolicy does not stop that. It is only as safe as everything those jobs
+run. Keep *Allow public repositories* off unless every public repository's fork pull requests need approval before
+they run (Settings → Actions → General → *Fork pull request workflows*).
 
 ## The image
 
 [`image/Dockerfile`](image/Dockerfile), built on a GitHub-hosted arm64 runner by
-[`build-runner-image.yml`](../../../.github/workflows/build-runner-image.yml) (it needs a Docker daemon, which mk4's runners
-lack) and pushed to `ghcr.io/mrjithendar/mk4-runner` on `master`. Pull requests build and smoke-test it without pushing.
+[`build-runner-image.yml`](../../../.github/workflows/build-runner-image.yml) (not on mk4, so a broken runner image can
+still be rebuilt) and pushed to `ghcr.io/mrjithendar/mk4-runner` on `master`. Pull requests build and smoke-test it without pushing.
 
 From `ghcr.io/actions/actions-runner` (Ubuntu 24.04: `git`, `curl`, `jq`, `unzip`, `sudo`, the `docker` CLI), plus:
 
